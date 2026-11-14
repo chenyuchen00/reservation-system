@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>琴房預借系統 - 教師預約專區</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<!-- ===== 修改部分：設定角色為 teacher ===== -->
+
+<body data-role="teacher">
+
+    <nav id="nav">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-title">YU CHEN</span>
+                <span class="logo-sub">PIANOS</span>
+            </div>
+
+            <ul class="nav-links">
+                <!--<li><a href="index.html#hero">首頁</a></li>-->
+                <li><a href="#schedule">琴房預約</a></li>
+                <li><a href="#history-section">歷史預約</a></li>
+            </ul>
+
+            <!-- ===== 修改部分：身份切換按鈕高亮教師 ===== -->
+            <div class="role-nav">
+                <span class="role-label"><i class="fa-solid fa-user-shield"></i> 身份切換：</span>
+                <a href="index.html" class="role-btn">學生 / 訪客</a>
+                <a href="teacher.html" class="role-btn active badge-teacher">教師專區</a>
+                <a href="admin.html" class="role-btn">管理者入口</a>
+            </div>
+            <!-- ============================================ -->
+        </div>
+    </nav>
+
+    <!--
+    <header id="hero">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <span class="hero-tag">Teacher Access</span>
+            <h1 class="hero-title">教師琴房預約專區</h1>
+            <p class="hero-desc">點擊下方課表時段即可進行彈性琴房預約與刪除操作。</p>
+            <div class="hero-btns">
+                <a href="#schedule" class="btn btn-dark">開始預約時段</a>
+            </div>
+        </div>
+    </header>
+    -->
+
+    <section class="section">
+        <div id="schedule" class="container">
+            <div class="section-header">
+                <span class="section-tag">Booking System</span>
+                <h2 class="section-title">琴房時段預約與刪除</h2>
+                <p class="section-desc">請點擊任意「可預約」時段進行借用，或點擊「已預約」欄位進行取消或編輯。</p>
+            </div>
+
+            <div class="filter-bar card">
+                <div class="room-tabs" id="room-tabs"></div>
+                
+                <div class="filter-group">
+                    <button class="filter-btn active" onclick="filterStatus('all')">全部時段</button>
+                    <button class="filter-btn" onclick="filterStatus('free')">可預約</button>
+                    <button class="filter-btn" onclick="filterStatus('booked')">已預約</button>
+                    <button class="filter-btn" onclick="filterStatus('maintain')">維護中</button>
+                </div>
+            </div>
+
+            <div class="schedule-wrapper" style="position: relative;">
+                <!-- 左側切換週數按鈕 -->
+                <button class="week-side-btn week-prev-btn" onclick="changeWeek(-1)">&#10094;</button>
+
+                <!-- 琴房一覽表表格卡片 -->
+                <div class="card table-box">
+                    <table class="schedule-table">
+                        <thead></thead>
+                        <tbody id="schedule-body"></tbody>
+                    </table>
+                </div>
+                <button class="confirm-reservation-btn btn-dark">確定預約</button>
+                <!-- 右側切換週數按鈕 -->
+                <button class="week-side-btn week-next-btn" onclick="changeWeek(1)">&#10095;</button>
+            </div>
+
+
+            <div class="legend-bar">
+                <span class="legend-item"><i class="dot free"></i> 可預約</span>
+                <span class="legend-item"><i class="dot booked"></i> 已預約</span>
+                <span class="legend-item"><i class="dot maintain"></i> 維護中</span>
+                <span class="notice-text"><i class="fa-solid fa-check-circle"></i> 教師權限：直接點擊格子即可預約或刪除。</span>
+            </div>
+        </div>
+    </section>
+
+    <section id="history-section" class="section bg-light" style="padding-top: 50px;">
+        <div class="container">
+            <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin-bottom: 25px;">
+                <!-- 左側留空佔位，確保中間能絕對置中 -->
+                <div></div>
+
+                <!-- 中間：標題與敘述（絕對置中） -->
+                <div style="text-align: center;">
+                    <span class="section-tag">History Records</span>
+                    <h2 class="section-title">我的歷史預約單</h2>
+                    <p class="section-desc" style="margin-bottom: 0;">列出您過去所有預約過的琴房記錄與詳細用途。</p>
+                </div>
+
+                <!-- 右側：新增預約單按鈕（靠右對齊） -->
+                <div style="display: flex; justify-content: flex-end; padding-right: 250px;">
+                    <button class="btn btn-dark" onclick="openManualBookingModal()">
+                        <i class="fa-solid fa-plus"></i> 新增預約單
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-teacher-history">
+                <div
+                    style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between;">
+                    <!-- 左側：琴房篩選與排序 -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <select id="history-room-filter" class="input" style="width: 140px; padding: 6px 10px;"
+                            onchange="renderTeacherHistory()">
+                            <option value="all">全部琴房</option>
+                            <option value="琴房 A">琴房 A</option>
+                            <option value="琴房 B">琴房 B</option>
+                            <option value="琴房 C">琴房 C</option>
+                            <option value="琴房 D">琴房 D</option>
+                            <option value="琴房 E">琴房 E</option>
+                            <option value="琴房 F">琴房 F</option>
+                        </select>
+
+                        <select id="history-sort-order" class="input" style="width: 150px; padding: 6px 10px;"
+                            onchange="renderTeacherHistory()">
+                            <option value="newest">順序：由新到舊</option>
+                            <option value="oldest">順序：由舊到新</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; font-size: 0.9rem;">
+                        <span style="color: var(--text-muted);">日期：</span>
+                        <input type="date" id="history-start-date" class="input" style="width: 140px; padding: 5px 8px;"
+                            onchange="renderTeacherHistory()">
+                        <span>至</span>
+                        <input type="date" id="history-end-date" class="input" style="width: 140px; padding: 5px 8px;"
+                            onchange="renderTeacherHistory()">
+                        <button class="btn btn-line btn-sm" onclick="clearDateFilter()"
+                            style="padding: 5px 10px; font-size: 0.8rem;">清除日期</button>
+                    </div>
+
+
+
+                    <!-- 右側：關鍵字搜尋原因 -->
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="history-search-input" class="input" placeholder="搜尋預約原因..."
+                            style="width: 200px; padding: 6px 10px;" oninput="renderTeacherHistory()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card table-box">
+                <table class="schedule-table" style="width: 100%; text-align: center;">
+                    <thead>
+                        <tr>
+                            <th>琴房</th>
+                            <th>週別 / 日期</th>
+                            <th>時段</th>
+                            <th>預約原因</th>
+                            <th>狀態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teacher-history-body">
+                        <!-- 動態渲染歷史預約清單 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 彈出視窗：預約琴房 -->
+    <div id="modal-booking" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">琴房預約操作</h3>
+                <button class="close-btn" onclick="closeModal('modal-booking')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-info" class="modal-info-text"></p>
+                <form id="form-booking">
+                    <div class="form-group">
+                        <label>預約教師姓名：</label>
+                        <input type="text" id="book-user" class="input" placeholder="例如：陳老師" required>
+                    </div>
+                    <div class="form-group">
+                        <label>預約用途：</label>
+                        <input type="text" id="book-reason" class="input" placeholder="例如：聲樂教學 / 個人練琴">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-line" onclick="closeModal('modal-booking')">取消</button>
+                <button class="btn btn-dark" id="modal-action-btn" onclick="submitBooking()">確認提交</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-manual-booking" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>依日期新增預約單</h3>
+                <button class="close-btn" onclick="closeModal('modal-manual-booking')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>選擇日期：</label>
+                    <input type="date" id="manual-date" class="input" onchange="updateAvailableRoomsForBooking()">
+                </div>
+                <div class="form-group">
+                    <label>選擇時段：</label>
+                    <select id="manual-timeslot" class="input" onchange="updateAvailableRoomsForBooking()">
+                        <option value="0">09:00 - 10:00</option>
+                        <option value="1">10:00 - 11:00</option>
+                        <option value="2">11:00 - 12:00</option>
+                        <option value="3">12:00 - 13:00</option>
+                        <option value="4">13:00 - 14:00</option>
+                        <option value="5">14:00 - 15:00</option>
+                        <option value="6">15:00 - 16:00</option>
+                        <option value="7">16:00 - 17:00</option>
+                        <option value="8">17:00 - 18:00</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>選擇琴房：</label>
+                    <!-- 改回下拉式表單，透過 JavaScript 動態生成選項與狀態 -->
+                    <select id="manual-room" class="input" onchange="checkManualRoomSelection()">
+                        <option value="">請先選擇日期與時段</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>預約原因 / 用途：</label>
+                    <input type="text" id="manual-reason" class="input" placeholder="例如：聲樂個別教學">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-line" onclick="closeModal('modal-manual-booking')">取消</button>
+                <button class="btn btn-dark" id="submit-manual-btn" onclick="submitManualBooking()"
+                    disabled>確認送出預約</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>琴房預借系統 - 管理者主控台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<!-- ===== 修改部分：設定角色為 admin ===== -->
+
+<body data-role="admin">
+
+    <nav id="nav">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-title">YU CHEN</span>
+                <span class="logo-sub">PIANOS</span>
+            </div>
+
+            <ul class="nav-links">
+                <!--<li><a href="index.html#hero">首頁</a></li>-->
+                <li><a href="#schedule">琴房預約</a></li>
+                <!-- ===== 修改部分：管理者可看到系統管理區選單 ===== -->
+                <li><a href="#admin">系統管理區</a></li>
+            </ul>
+
+            <div class="role-nav">
+                <span class="role-label"><i class="fa-solid fa-user-shield"></i> 身份切換：</span>
+                <a href="index.html" class="role-btn">學生 / 訪客</a>
+                <a href="teacher.html" class="role-btn">教師入口</a>
+                <a href="admin.html" class="role-btn active badge-admin">管理者控制台</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="section">
+        <div id="schedule" class="container">
+            <div class="section-header">
+                <span class="section-tag">Admin Management</span>
+                <h2 class="section-title">琴房預約總覽與控制</h2>
+                <p class="section-desc">管理權限：全權刪除/新增預約及將時段設為維護中。</p>
+            </div>
+
+            <div class="filter-bar card">
+                <div class="room-tabs" id="room-tabs"></div>
+                <div class="filter-group">
+                    <button class="filter-btn active" onclick="filterStatus('all')">全部時段</button>
+                    <button class="filter-btn" onclick="filterStatus('free')">可預約</button>
+                    <button class="filter-btn" onclick="filterStatus('booked')">已預約</button>
+                    <button class="filter-btn" onclick="filterStatus('maintain')">維護中</button>
+                </div>
+            </div>
+
+            <div class="schedule-wrapper" style="position: relative;">
+                <!-- 左側切換週數按鈕 -->
+                <button class="week-side-btn week-prev-btn" onclick="changeWeek(-1)">&#10094;</button>
+                
+                <!-- 琴房一覽表表格卡片 -->
+                <div class="card table-box">
+                    <table class="schedule-table">
+                        <thead></thead>
+                        <tbody id="schedule-body"></tbody>
+                    </table>
+                </div>
+                <button class="confirm-reservation-btn btn-dark">確定預約</button>
+                <button class="close-slot-btn btn-dark">關閉時段</button>
+                <!-- 右側切換週數按鈕 -->
+                <button class="week-side-btn week-next-btn" onclick="changeWeek(1)">&#10095;</button>
+            </div>
+
+            <div class="legend-bar">
+                <span class="legend-item"><i class="dot free"></i> 可預約</span>
+                <span class="legend-item"><i class="dot booked"></i> 已預約</span>
+                <span class="legend-item"><i class="dot maintain"></i> 維護中</span>
+                <span class="notice-text"><i class="fa-solid fa-check-circle"></i> 管理者權限：全權刪除/新增預約及關閉時段。</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- 系統管理區 (管理者獨占) -->
+    <section id="admin" class="section bg-light">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">System Settings</span>
+                <h2 class="section-title">時段與帳號權限管理</h2>
+                <p class="section-desc">新增、修改、刪除開放時段與人員權限帳號。</p>
+            </div>
+
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="switchAdminTab('times')">時段管理</button>
+                <button class="tab-btn" onclick="switchAdminTab('users')">帳號與權限管理</button>
+            </div>
+
+            <!-- 時段管理面板 -->
+            <div id="tab-times" class="admin-panel card active">
+                <div class="panel-header">
+                    <h3>每週開放時段設定</h3>
+                    <button class="btn btn-dark" onclick="openTimeModal()"><i class="fa-solid fa-plus"></i>
+                        新增時段</button>
+                </div>
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>時段名稱</th>
+                            <th>開始時間</th>
+                            <th>結束時間</th>
+                            <th>開放狀態</th>
+                            <th>操作選項</th>
+                        </tr>
+                    </thead>
+                    <tbody id="time-list"></tbody>
+                </table>
+            </div>
+
+            <!-- 帳號管理面板 -->
+            <div id="tab-users" class="admin-panel card">
+                <div class="panel-header">
+                    <h3>教師與管理者帳號權限設定</h3>
+                    <button class="btn btn-dark" onclick="openUserModal()"><i class="fa-solid fa-user-plus"></i>
+                        新增帳號</button>
+                </div>
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>姓名</th>
+                            <th>帳號 (Email)</th>
+                            <th>權限角色</th>
+                            <th>狀態</th>
+                            <th>操作選項</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Modal 預約視窗 -->
+    <div id="modal-booking" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <h3 id="modal-title">琴房預約操作</h3>
+                    <!-- 新增：管理者專用「關閉預約權限」按鈕容器 -->
+                    <div id="modal-header-action-container"></div>
+                </div>
+                <button class="close-btn" onclick="closeModal('modal-booking')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-info" class="modal-info-text"></p>
+                <form id="form-booking">
+                    <div class="form-group">
+                        <label>預約人/使用者：</label>
+                        <input type="text" id="book-user" class="input" placeholder="請輸入姓名" required>
+                    </div>
+                    <div class="form-group">
+                        <label>預約用途：</label>
+                        <input type="text" id="book-reason" class="input" placeholder="例如：維護測試 / 教學">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-line" onclick="closeModal('modal-booking')">取消</button>
+                <button class="btn btn-dark" id="modal-action-btn" onclick="submitBooking()">確認提交</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

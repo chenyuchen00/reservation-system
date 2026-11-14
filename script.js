@@ -1,0 +1,1523 @@
+const rooms = ['琴房 A', '琴房 B', '琴房 C', '琴房 D', '琴房 E', '琴房 F'];
+const timeslots = [
+    '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00',
+    '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00',
+    '15:00 - 16:00', '16:00 - 17:00', '17:00 - 18:00'
+];
+
+let currentRole = 'student';
+const currentTeacherName = '楊老師';
+let curRoom = 0;
+let activeFilter = 'all';
+
+let currentDate = new Date();
+let weekOffset = 0;
+
+// 隨時可多選的暫存格子 key 陣列
+let selectedBatchCells = [];
+
+// 取得指定日期所在週的星期一 Date 物件
+function getMonday(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff));
+}
+
+// 取得日期對應的 ISO 週號
+function getWeekNumber(d) {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+// 透過 weekNum 與 dIdx 反推真實日期物件
+function getCellRealDate(weekNum, dIdx) {
+    const simpleYear = currentDate.getFullYear();
+    const simpleDate = new Date(simpleYear, 0, 1);
+    const dayOfWeek = simpleDate.getDay() || 7;
+
+    let daysOffset = (weekNum - 1) * 7 + (dayOfWeek <= 4 ? 1 - dayOfWeek : 8 - dayOfWeek);
+    const targetMonday = new Date(simpleYear, 0, 1);
+    targetMonday.setDate(simpleDate.getDate() + daysOffset - 1);
+
+    const cellDate = new Date(targetMonday);
+    cellDate.setDate(targetMonday.getDate() + dIdx + 1);
+    return cellDate;
+}
+
+let scheduleData = {
+    '0-46-1-2': { status: 'booked', user: '張教授', reason: '聲樂個別課' },
+    '0-46-5-3': { status: 'booked', user: '李老師', reason: '鋼琴陪練' },
+    '0-46-6-0': { status: 'booked', user: '陳老師', reason: '鋼琴教學' },
+    '0-46-1-6': { status: 'booked', user: '張教授', reason: '聲樂個別課' },
+    '0-46-3-4': { status: 'booked', user: '李老師', reason: '鋼琴陪練' },
+    '0-46-6-5': { status: 'booked', user: '陳老師', reason: '鋼琴教學' },
+    '0-46-4-6': { status: 'booked', user: '楊老師', reason: '聲樂教學' },
+    '0-46-4-2': { status: 'booked', user: '楊老師', reason: '聲樂教學' },
+    '0-46-0-1': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-46-1-1': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-46-2-1': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-46-3-1': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-47-1-1': { status: 'booked', user: '張教授', reason: '聲樂個別課' },
+    '0-47-3-3': { status: 'booked', user: '李老師', reason: '鋼琴陪練' },
+    '0-47-6-2': { status: 'booked', user: '陳老師', reason: '鋼琴教學' },
+    '0-47-7-5': { status: 'booked', user: '楊老師', reason: '聲樂教學' },
+    '0-47-0-6': { status: 'booked', user: '楊老師', reason: '聲樂教學' },
+    '0-47-1-6': { status: 'booked', user: '楊老師', reason: '聲樂教學' },
+    '0-47-5-4': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-47-6-4': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-47-7-4': { status: 'maintain', user: '系統', reason: '定期調音維護' },
+    '0-47-8-4': { status: 'maintain', user: '系統', reason: '定期調音維護' }
+};
+
+let timeData = [
+    { id: 1, name: '早晨時段 A', start: '09:00', end: '12:00', status: '開放' },
+    { id: 2, name: '下午時段 B', start: '12:00', end: '17:00', status: '開放' },
+    { id: 3, name: '晚間時段 C', start: '17:00', end: '21:00', status: '不開放' }
+];
+
+let userData = [
+    { id: 1, name: '張教授', email: 'chang@music.edu', role: '教師', status: '啟用' },
+    { id: 2, name: '李老師', email: 'lee@music.edu', role: '教師', status: '啟用' },
+    { id: 3, name: '楊老師', email: 'yang@music.edu', role: '教師', status: '啟用' },
+    { id: 4, name: '系統管理員', email: 'admin@music.edu', role: '管理者', status: '啟用' }
+];
+
+let targetCell = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    currentRole = document.body.getAttribute('data-role') || 'student';
+    renderRooms();
+    renderSchedule();
+    renderTeacherHistory();
+
+    // 綁定旁邊的「確定預約」按鈕點擊事件
+    const confirmBtn = document.querySelector('.confirm-reservation-btn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', handleConfirmReservationClick);
+    }
+
+    // 【新增】綁定旁邊的「關閉時段」按鈕點擊事件
+    const closeSlotBtn = document.querySelector('.close-slot-btn');
+    if (closeSlotBtn) {
+        closeSlotBtn.addEventListener('click', handleBatchCloseSlots);
+    }
+
+    if (document.getElementById('time-list')) renderTimeTable();
+    if (document.getElementById('user-list')) renderUserTable();
+});
+
+function renderRooms() {
+    const box = document.getElementById('room-tabs');
+    if (!box) return;
+    box.innerHTML = rooms.map((r, i) => `
+        <button class="tab-item ${i === curRoom ? 'active' : ''}" onclick="setRoom(${i})">${r}</button>
+    `).join('');
+}
+
+function setRoom(index) {
+    curRoom = index;
+    renderRooms();
+    renderSchedule();
+}
+
+function changeWeek(delta) {
+    weekOffset += delta;
+    renderSchedule();
+}
+
+function filterStatus(status) {
+    activeFilter = status;
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    renderSchedule();
+}
+
+// -------------------------------------------------------------
+// 側邊「確定預約」按鈕點擊處理邏輯
+// -------------------------------------------------------------
+function handleConfirmReservationClick() {
+    if (currentRole !== 'teacher' && currentRole !== 'admin') {
+        alert('【權限提示】目前為學生模式，無預約權限。');
+        return;
+    }
+
+    if (selectedBatchCells.length === 0) {
+        alert('請先在課表中點擊選擇要預約的時段（可單選或多選）！');
+        return;
+    }
+
+    const modal = document.getElementById('modal-booking');
+    const title = document.getElementById('modal-title');
+    const info = document.getElementById('modal-info');
+    const btn = document.getElementById('modal-action-btn');
+    const userInput = document.getElementById('book-user');
+    const reasonInput = document.getElementById('book-reason');
+    const formGroupUser = userInput ? userInput.closest('.form-group') : null;
+    const formGroupReason = reasonInput ? reasonInput.closest('.form-group') : null;
+
+    if (!modal || !btn) return;
+
+    modal.classList.add('active');
+
+    const weekDaysChinese = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
+
+    // 建立或取得管理者專用的教師下拉選單容器（不破壞原本的 formGroupUser）
+    let adminTeacherGroup = document.getElementById('modal-batch-admin-teacher-group');
+    if (!adminTeacherGroup && formGroupReason) {
+        adminTeacherGroup = document.createElement('div');
+        adminTeacherGroup.id = 'modal-batch-admin-teacher-group';
+        adminTeacherGroup.className = 'form-group';
+        formGroupReason.parentNode.insertBefore(adminTeacherGroup, formGroupReason);
+    }
+
+    if (currentRole === 'admin') {
+        if (formGroupUser) formGroupUser.style.display = 'none';
+        if (adminTeacherGroup) {
+            adminTeacherGroup.style.display = 'block';
+            const teachers = userData.filter(u => u.role === '教師' && u.status === '啟用');
+            const teacherOptions = teachers.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+            adminTeacherGroup.innerHTML = `
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted);">預約教師姓名 (管理者指定)：</label>
+                <select id="batch-book-teacher-select" class="input">
+                    ${teacherOptions}
+                </select>
+            `;
+        }
+    } else {
+        if (adminTeacherGroup) adminTeacherGroup.style.display = 'none';
+        if (formGroupUser) formGroupUser.style.display = 'none';
+        if (userInput) userInput.value = currentTeacherName;
+    }
+
+    if (formGroupReason) formGroupReason.style.display = 'block';
+    if (reasonInput) reasonInput.value = '聲樂課';
+
+    // 內部渲染時段清單與重複選項的函式
+    function renderBatchModalContent() {
+        if (selectedBatchCells.length === 0) {
+            closeModal('modal-booking');
+            renderSchedule();
+            return;
+        }
+
+        title.innerText = '琴房預約操作';
+
+        let listHtml = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-weight: bold; color: var(--text-main);">已選取時段清單：</span>
+                <button type="button" onclick="continueSelectingSlots()" title="返回課表繼續加選時段" 
+                    style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #C8B49E; background-color: #F3EAE0; color: #5A4A3B; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        `;
+        listHtml += `<div style="max-height: 130px; overflow-y: auto; border: 1px solid #E6D5C3; padding: 6px; border-radius: 6px; background: #FAF6F0; margin-bottom: 10px;">`;
+
+        selectedBatchCells.forEach((cellKey, index) => {
+            const parts = cellKey.split('-');
+            const roomIdx = parseInt(parts[0]);
+            const weekNum = parseInt(parts[1]);
+            const tIdx = parseInt(parts[2]);
+            const dIdx = parseInt(parts[3]);
+
+            const cellDate = getCellRealDate(weekNum, dIdx);
+            const dateStr = `${cellDate.getFullYear()}/${String(cellDate.getMonth() + 1).padStart(2, '0')}/${String(cellDate.getDate()).padStart(2, '0')}${weekDaysChinese[cellDate.getDay()]}`;
+            const timeStr = timeslots[tIdx];
+
+            listHtml += `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-bottom: 1px solid #EAE0D0; font-size: 0.85rem;">
+                    <span> ${rooms[roomIdx]}｜${dateStr} ${timeStr}</span>
+                    <button type="button" onclick="removeBatchCellByIndex(${index})" title="刪除此時段" style="background: none; border: none; color: #b54545; cursor: pointer; padding: 2px 6px;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        });
+        listHtml += `</div>`;
+
+        let repeatHtml = `
+            <div id="repeat-group" style="margin-top: 10px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 4px; color: var(--text-main);">重複預約頻率：</label>
+                <select id="repeat-select" style="width: 100%; padding: 6px; border: 1px solid #D4BCA5; border-radius: 4px; background: #fff; font-size: 0.9rem;">
+                    <option value="none" selected>不重複</option>
+                    <option value="daily">每天 (連續 7 天)</option>
+                    <option value="weekly">每週 (連續 4 週)</option>
+                    <option value="monthly">每月 (連續 3 個月)</option>
+                </select>
+            </div>
+        `;
+
+        info.innerHTML = listHtml + repeatHtml;
+    }
+
+    renderBatchModalContent();
+
+    btn.innerText = '確認提交預約';
+    btn.className = 'btn btn-dark';
+
+    // 綁定提交按鈕事件（保留完整重複展開與衝突偵測邏輯）
+    btn.onclick = function(e) {
+        e.preventDefault(); // 防止預設表單提交行為
+        
+        const selectedTeacher = (currentRole === 'admin') 
+            ? (document.getElementById('batch-book-teacher-select')?.value || currentTeacherName)
+            : currentTeacherName;
+        const reason = (reasonInput && reasonInput.value.trim()) ? reasonInput.value.trim() : '個人練習';
+        const repeatType = document.getElementById('repeat-select')?.value || 'none';
+
+        let targetSlotsToBook = [];
+
+        selectedBatchCells.forEach(cellKey => {
+            const parts = cellKey.split('-');
+            const roomIdx = parseInt(parts[0]);
+            let baseWeekNum = parseInt(parts[1]);
+            const tIdx = parseInt(parts[2]);
+            const baseDIdx = parseInt(parts[3]);
+
+            const baseDate = getCellRealDate(baseWeekNum, baseDIdx);
+
+            let repeatCount = 1;
+            let stepDays = 0;
+            let stepWeeks = 0;
+            let stepMonths = 0;
+
+            if (repeatType === 'daily') {
+                repeatCount = 7;
+                stepDays = 1;
+            } else if (repeatType === 'weekly') {
+                repeatCount = 4;
+                stepWeeks = 1;
+            } else if (repeatType === 'monthly') {
+                repeatCount = 3;
+                stepMonths = 1;
+            }
+
+            for (let i = 0; i < repeatCount; i++) {
+                let targetDate = new Date(baseDate);
+                if (stepDays > 0) targetDate.setDate(baseDate.getDate() + (i * stepDays));
+                if (stepWeeks > 0) targetDate.setDate(baseDate.getDate() + (i * 7 * stepWeeks));
+                if (stepMonths > 0) targetDate.setMonth(baseDate.getMonth() + (i * stepMonths));
+
+                const targetWeekNum = getWeekNumber(targetDate);
+                let targetDayOfWeek = targetDate.getDay();
+                let targetDIdx = targetDayOfWeek === 0 ? 6 : targetDayOfWeek - 1;
+
+                const targetKey = `${roomIdx}-${targetWeekNum}-${tIdx}-${targetDIdx}`;
+                const dateFormatted = `${targetDate.getFullYear()}/${String(targetDate.getMonth() + 1).padStart(2, '0')}/${String(targetDate.getDate()).padStart(2, '0')}${weekDaysChinese[targetDate.getDay()]}`;
+
+                targetSlotsToBook.push({
+                    key: targetKey,
+                    roomIdx,
+                    weekNum: targetWeekNum,
+                    tIdx,
+                    dIdx: targetDIdx,
+                    dateTimeDesc: `${dateFormatted} ${timeslots[tIdx]}`
+                });
+            }
+        });
+
+        // 檢查衝突
+        let conflictedSlots = targetSlotsToBook.filter(slot => {
+            const existing = scheduleData[slot.key];
+            return existing && existing.status !== 'free';
+        });
+
+        if (conflictedSlots.length > 0) {
+            let conflictMsg = `以下時段已被預約或維護中，發生衝突：\n`;
+            conflictedSlots.forEach(s => {
+                conflictMsg += `- ${rooms[s.roomIdx]} ${s.dateTimeDesc}\n`;
+            });
+            conflictMsg += `\n請選擇處理方式：\n【確定】跳過衝突時段，僅預約其他可用時段\n【取消】重新修改時間`;
+
+            const userChoice = confirm(conflictMsg);
+            if (!userChoice) {
+                return;
+            } else {
+                targetSlotsToBook = targetSlotsToBook.filter(slot => {
+                    const existing = scheduleData[slot.key];
+                    return !existing || existing.status === 'free';
+                });
+            }
+        }
+
+        if (targetSlotsToBook.length === 0) {
+            alert('沒有任何可預約的有效時段！');
+            return;
+        }
+
+        // 正式寫入資料
+        targetSlotsToBook.forEach(slot => {
+            scheduleData[slot.key] = {
+                status: 'booked',
+                user: selectedTeacher,
+                reason: reason
+            };
+        });
+
+        alert(`成功完成 ${targetSlotsToBook.length} 個時段的預約！`);
+        closeModal('modal-booking');
+        
+        selectedBatchCells = []; 
+        renderSchedule();
+        renderTeacherHistory();
+
+        btn.onclick = submitBooking;
+    };
+}
+
+// -------------------------------------------------------------
+// 側邊「關閉時段」按鈕點擊處理邏輯（批次將多選格子設為維護中）
+// -------------------------------------------------------------
+function handleBatchCloseSlots() {
+    // 1. 權限檢查：只有管理者才能執行
+    if (currentRole !== 'admin') {
+        alert('【權限限制】您沒有權限關閉預約權限！此操作僅限系統管理者執行。');
+        return;
+    }
+
+    // 2. 檢查是否有選取格子
+    if (selectedBatchCells.length === 0) {
+        alert('請先在課表中點擊選擇要關閉維護的時段（可單選或多選）！');
+        return;
+    }
+
+    // 3. 彈出確認視窗
+    if (confirm(`確定要將選取的 ${selectedBatchCells.length} 個時段關閉預約權限嗎？（將設為維護中狀態）`)) {
+        // 4. 迴圈將所有選取的格子設為 maintain 狀態
+        selectedBatchCells.forEach(cellKey => {
+            const parts = cellKey.split('-'); // [roomIdx, weekNum, tIdx, dIdx]
+            const roomIdx = parseInt(parts[0]);
+            const weekNum = parseInt(parts[1]);
+            const tIdx = parseInt(parts[2]);
+            const dIdx = parseInt(parts[3]);
+
+            const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
+            scheduleData[key] = { 
+                status: 'maintain', 
+                user: '系統', 
+                reason: '管理者手動關閉' 
+            };
+        });
+
+        alert(`已成功將選取的 ${selectedBatchCells.length} 個時段關閉預約權限！`);
+        
+        selectedBatchCells = []; // 清空暫存選取
+        renderSchedule();        // 重新渲染課表
+        renderTeacherHistory();  // 更新歷史或相關面板
+    }
+}
+
+// 彈窗內點擊刪除單一時段的輔助函式
+function removeBatchCellByIndex(index) {
+    selectedBatchCells.splice(index, 1); // 從暫存陣列移除該時段
+    renderSchedule(); // 同步更新課表上的勾選狀態
+
+    if (selectedBatchCells.length === 0) {
+        alert('已清除所有選取時段');
+        closeModal('modal-booking');
+    } else {
+        // 重新整理彈窗內的清單
+        handleConfirmReservationClick();
+    }
+}
+
+// 點擊彈窗內的「+」按鈕：關閉彈窗並自動捲動至課表，保留已選格子繼續加選
+function continueSelectingSlots() {
+    closeModal('modal-booking');
+    
+    // 還原按鈕預設事件，避免影響後續單格操作
+    const btn = document.getElementById('modal-action-btn');
+    if (btn) btn.onclick = submitBooking;
+
+    // 平滑捲動到課表位置，方便直接繼續點選
+    const scheduleTable = document.querySelector('.schedule-table');
+    if (scheduleTable) {
+        scheduleTable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+// -------------------------------------------------------------
+// 渲染琴房一覽表課表（支援跨時段合併顯示與隨時多選勾選外框）
+// -------------------------------------------------------------
+function renderSchedule() {
+    const body = document.getElementById('schedule-body');
+    const tableHeader = document.querySelector('.schedule-table thead');
+    const weekDisplay = document.getElementById('week-display');
+    if (!body) return;
+
+    const today = new Date();
+    const baseMonday = getMonday(currentDate);
+    const targetMonday = new Date(baseMonday);
+    targetMonday.setDate(targetMonday.getDate() + (weekOffset * 7));
+
+    const weekDaysStr = ['(一)', '(二)', '(三)', '(四)', '(五)', '(六)', '(日)'];
+    const weekDates = [];
+
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(targetMonday);
+        d.setDate(d.getDate() + i);
+        weekDates.push(d);
+    }
+
+    const sunday = weekDates[6];
+    const weekNum = getWeekNumber(targetMonday);
+    if (weekDisplay) {
+        weekDisplay.innerText = `${targetMonday.getFullYear()}年${targetMonday.getMonth() + 1}月${targetMonday.getDate()}日 - ${sunday.getFullYear()}年${sunday.getMonth() + 1}月${sunday.getDate()}日 (第 ${weekNum} 週)`;
+    }
+
+    if (tableHeader) {
+        let thHtml = '<tr><th>時段 / 日期</th>';
+        weekDates.forEach((d, i) => {
+            const isToday = d.toDateString() === today.toDateString();
+            const dateStr = `${d.getMonth() + 1}/${d.getDate()}${weekDaysStr[i]}`;
+            thHtml += `<th class="${isToday ? 'today-header' : ''}">
+                ${dateStr} ${isToday ? '<span class="today-tag">今日</span>' : ''}
+            </th>`;
+        });
+        thHtml += '</tr>';
+        tableHeader.innerHTML = thHtml;
+    }
+
+    body.innerHTML = '';
+
+    let skipMap = {};
+    for (let dIdx = 0; dIdx < 7; dIdx++) {
+        let tIdx = 0;
+        while (tIdx < timeslots.length) {
+            const key = `${curRoom}-${weekNum}-${tIdx}-${dIdx}`;
+            const data = scheduleData[key];
+
+            if (data && data.status === 'booked') {
+                let streak = 1;
+                while (tIdx + streak < timeslots.length) {
+                    const nextKey = `${curRoom}-${weekNum}-${tIdx + streak}-${dIdx}`;
+                    const nextData = scheduleData[nextKey];
+                    if (nextData && nextData.status === 'booked' && nextData.user === data.user && nextData.reason === data.reason) {
+                        streak++;
+                    } else {
+                        break;
+                    }
+                }
+                if (streak > 1) {
+                    skipMap[`${tIdx}-${dIdx}`] = streak;
+                    for (let s = 1; s < streak; s++) {
+                        skipMap[`${tIdx + s}-${dIdx}`] = 'skip';
+                    }
+                    tIdx += streak;
+                    continue;
+                }
+            }
+            tIdx++;
+        }
+    }
+
+    timeslots.forEach((time, tIdx) => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${time}</strong></td>`;
+
+        const endTimeStr = time.split(' - ')[1];
+        const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+
+        for (let dIdx = 0; dIdx < 7; dIdx++) {
+            const skipStatus = skipMap[`${tIdx}-${dIdx}`];
+            if (skipStatus === 'skip') {
+                continue;
+            }
+
+            const cellDate = new Date(weekDates[dIdx]);
+            cellDate.setHours(endHour, endMinute, 0, 0);
+
+            const isToday = weekDates[dIdx].toDateString() === today.toDateString();
+            const isPastTime = cellDate < today;
+
+            const key = `${curRoom}-${weekNum}-${tIdx}-${dIdx}`;
+            const data = scheduleData[key] || { status: 'free' };
+
+            let text = '可預約';
+            let cellClass = 'cell-free';
+            const isSelectedInBatch = selectedBatchCells.includes(key);
+
+            if (isPastTime) {
+                const isMyBooking = (currentRole === 'teacher' && data.status === 'booked' && data.user === currentTeacherName);
+                if (isMyBooking) {
+                    text = `您的預約<br><small style="color:var(--text-muted);">(已結束)</small>`;
+                    cellClass = 'cell-booked cell-my-booked';
+                } else {
+                    if (data.status === 'booked') {
+                        text = `${data.user}<br><small>(已結束)</small>`;
+                        cellClass = 'cell-booked';
+                    } else if (data.status === 'maintain') {
+                        text = '維護中';
+                        cellClass = 'cell-maintain';
+                    } else {
+                        text = '----';
+                        cellClass = 'cell-past';
+                    }
+                }
+            } else {
+                if (data.status === 'booked') {
+                    cellClass = 'cell-booked';
+                    if (currentRole === 'student') {
+                        text = `${data.user}`;
+                    } else if (currentRole === 'teacher') {
+                        if (data.user === currentTeacherName) {
+                            let displayTimeStr = timeslots[tIdx];
+                            if (typeof skipStatus === 'number' && skipStatus > 1) {
+                                const startH = timeslots[tIdx].split(' - ')[0];
+                                const endH = timeslots[tIdx + skipStatus - 1].split(' - ')[1];
+                                displayTimeStr = `${startH} - ${endH}`;
+                            }
+                            text = `您已預約<br><small>(${data.reason})</small>`;
+                            cellClass = 'cell-booked cell-my-booked';
+                        } else {
+                            text = `${data.user}`;
+                        }
+                    } else {
+                        text = `${data.user}<br><small>(${data.reason})</small>`;
+                    }
+                } else if (data.status === 'maintain') {
+                    text = '維護中';
+                    cellClass = 'cell-maintain';
+                }
+            }
+
+            let isHide = (activeFilter !== 'all' && activeFilter !== data.status);
+            const todayClass = isToday ? 'cell-today' : '';
+
+            let batchStyle = '';
+            if (isSelectedInBatch) {
+                cellClass += ' cell-batch-selected';
+                batchStyle = 'background-color: rgba(206, 177, 151, 0.6) !important; border: 2px dashed #5A4A3B !important; font-weight: bold;';
+            }
+
+            let rowSpanAttr = (typeof skipStatus === 'number' && skipStatus > 1) ? `rowspan="${skipStatus}"` : '';
+
+            const isPast = isPastTime; 
+            const isMaintain = (data.status === 'maintain');
+            const isBooked = (data.status === 'booked');
+            const isFree = (data.status === 'free');
+
+            // 組合專屬的 CSS 類別
+            let stateClass = isPast ? 'cell-is-past' : 'cell-is-future';
+            if (isMaintain) stateClass += ' cell-is-maintain';
+            if (isBooked) stateClass += ' cell-is-booked';
+            if (isFree && isPast) stateClass += ' cell-is-past-free'; // 專門給過期的 ---- (cell-past)
+
+            let cellDisplayContent = isSelectedInBatch 
+                ? '<i class="fa-solid fa-check" style="margin-right:4px;"></i>已選取' 
+                : text;
+
+            tr.innerHTML += `
+                <td ${rowSpanAttr} class="cell ${cellClass} ${todayClass} ${stateClass}" style="${isHide ? 'opacity:0.2;' : ''} ${batchStyle}" onclick="handleCellClick('${key}')">
+                    ${cellDisplayContent}
+                </td>
+            `;
+        }
+        body.appendChild(tr);
+    });
+    // 控制批次按鈕（確定預約、關閉時段）的顯示與隱藏
+    const confirmBtn = document.querySelector('.confirm-reservation-btn');
+    const closeSlotBtn = document.querySelector('.close-slot-btn'); // 確保您的關閉時段按鈕有這個 class
+    
+    const hasSelected = selectedBatchCells.length > 0;
+    
+    if (confirmBtn) {
+        confirmBtn.style.display = hasSelected ? 'inline-flex' : 'none'; // 改用 inline-flex 保持按鈕內部的對齊與排版
+    }
+    if (closeSlotBtn) {
+        closeSlotBtn.style.display = hasSelected ? 'inline-flex' : 'none';
+    }
+}
+
+// 點擊格子總入口（隨時可點擊多個空白格子進行複選）
+function handleCellClick(key) {
+    const data = scheduleData[key] || { status: 'free' };
+    if (currentRole === 'student') {
+        alert('【提示】目前為學生/訪客模式，無預約權限。請點擊右上角「教師入口」或「管理者入口」。');
+        return;
+    }
+
+    if (data.status === 'free') {
+        const parts = key.split('-');
+        const weekNum = parseInt(parts[1]);
+        const tIdx = parseInt(parts[2]);
+        const dIdx = parseInt(parts[3]);
+
+        // 取得該格子的真實日期與「開始時間」
+        const cellDate = getCellRealDate(weekNum, dIdx);
+        const startTimeStr = timeslots[tIdx].split(' - ')[0]; // 取開始時間 (例如 09:00)
+        const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+        cellDate.setHours(startHour, startMinute, 0, 0);
+
+        const today = new Date(); // 當前即時時間（包含時、分）
+
+        // 只要該時段的開始時間小於現在時間，就視為已過期
+        if (cellDate < today) {
+            alert('【提示】此時段已過期（今天以前或今日已結束），無法進行預約或修改。');
+            return;
+        }
+
+        const index = selectedBatchCells.indexOf(key);
+        if (index > -1) {
+            selectedBatchCells.splice(index, 1);
+        } else {
+            selectedBatchCells.push(key);
+        }
+        renderSchedule();
+        return;
+    }
+
+    clickCell(key);
+}
+
+// 點擊時段邏輯 (一般彈窗檢視/修改)
+function clickCell(key) {
+    const parts = key.split('-');
+    const weekNum = parseInt(parts[1]);
+    const tIdx = parseInt(parts[2]);
+    const dIdx = parseInt(parts[3]);
+
+    const cellDate = getCellRealDate(weekNum, dIdx);
+    const startTimeStr = timeslots[tIdx].split(' - ')[0];
+    const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+    cellDate.setHours(startHour, startMinute, 0, 0);
+
+    const today = new Date();
+    if (cellDate < today) {
+        alert('【提示】此時段已過期（今天以前或今日已結束），無法進行預約或修改。');
+        return;
+    }
+
+    if (currentRole === 'student') {
+        alert('【提示】目前為學生/訪客模式，無預約權限。請點擊右上角「教師入口」或「管理者入口」。');
+        return;
+    }
+
+    targetCell = key;
+    const data = scheduleData[key] || { status: 'free' };
+    if (data.status === 'maintain' && currentRole !== 'admin') {
+        alert('【權限限制】此時段為「維護中」，您沒有權限進行檢視或解除！');
+        return; 
+    }
+    const modal = document.getElementById('modal-booking');
+    const title = document.getElementById('modal-title');
+    const info = document.getElementById('modal-info');
+    const btn = document.getElementById('modal-action-btn');
+    const userInput = document.getElementById('book-user');
+    const reasonInput = document.getElementById('book-reason');
+    const formGroupUser = userInput.closest('.form-group');
+    const formGroupReason = reasonInput.closest('.form-group');
+
+    if (currentRole === 'teacher' && data.status === 'booked' && data.user !== currentTeacherName) {
+        alert(`【權限限制】此時段為「${data.user}」所預約，您（${currentTeacherName}）無法進行刪除或修改。`);
+        return;
+    }
+
+    modal.classList.add('active');
+
+    const existingHeaderBtn = document.getElementById('modal-header-close-btn');
+    if (existingHeaderBtn) existingHeaderBtn.remove();
+
+    if (data.status === 'free') {
+        title.innerText = '新增琴房預約';
+        info.innerText = `預約琴房：${rooms[curRoom]}`;
+        info.innerHTML += `<br>預約日期：${cellDate.getFullYear()}-${cellDate.getMonth() + 1}-${cellDate.getDate()}<br>預約時段：${timeslots[tIdx]}`;
+
+        if (formGroupUser) formGroupUser.style.display = 'block';
+        if (formGroupReason) formGroupReason.style.display = 'block';
+
+        if (currentRole === 'teacher') {
+            userInput.value = currentTeacherName;
+            userInput.readOnly = true;
+        } else {
+            userInput.value = '';
+            userInput.readOnly = false;
+        }
+
+        reasonInput.value = '';
+        btn.innerText = '確認預約';
+        btn.className = 'btn btn-dark';
+
+        if (currentRole === 'admin') {
+            const headerBtnContainer = document.getElementById('modal-header-action-container');
+            if (headerBtnContainer) {
+                const closeSlotBtn = document.createElement('button');
+                closeSlotBtn.id = 'modal-header-close-btn';
+                closeSlotBtn.className = 'btn btn-line btn-sm';
+                closeSlotBtn.style.color = 'var(--color-maintain)';
+                closeSlotBtn.style.borderColor = 'var(--color-maintain)';
+                closeSlotBtn.innerText = '關閉此時段預約權限';
+                closeSlotBtn.onclick = closeBookingSlot;
+                headerBtnContainer.appendChild(closeSlotBtn);
+            }
+        }
+    } else if (data.status === 'booked') {
+        title.innerText = '修改 / 刪除預約';
+        info.innerText = `預約琴房：${rooms[curRoom]}`;
+
+        if (formGroupReason) formGroupReason.style.display = 'block';
+        reasonInput.value = data.reason;
+
+        // 取得管理者專屬或共用的教師選單容器
+        let adminTeacherGroup = document.getElementById('modal-admin-teacher-group');
+        if (!adminTeacherGroup) {
+            adminTeacherGroup = document.createElement('div');
+            adminTeacherGroup.id = 'modal-admin-teacher-group';
+            adminTeacherGroup.className = 'form-group';
+            // 插在原本 book-user 的上方
+            formGroupUser.parentNode.insertBefore(adminTeacherGroup, formGroupUser);
+        }
+
+        if (currentRole === 'admin') {
+            // 隱藏原本的 book-user 欄位，改用管理者的下拉選單
+            if (formGroupUser) formGroupUser.style.display = 'none';
+            adminTeacherGroup.style.display = 'block';
+
+            const teachers = userData.filter(u => u.role === '教師' && u.status === '啟用');
+            let teacherOptions = teachers.map(t => 
+                `<option value="${t.name}" ${t.name === data.user ? 'selected' : ''}>${t.name}</option>`
+            ).join('');
+
+            if (!teachers.some(t => t.name === data.user)) {
+                teacherOptions += `<option value="${data.user}" selected>${data.user}</option>`;
+            }
+
+            adminTeacherGroup.innerHTML = `
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted);">預約教師姓名 (管理者指定)：</label>
+                <select id="edit-book-teacher-select" class="input">
+                    ${teacherOptions}
+                </select>
+            `;
+        } else {
+            // 教師模式：隱藏管理者下拉選單，顯示原本的唯讀 input
+            adminTeacherGroup.style.display = 'none';
+            if (formGroupUser) formGroupUser.style.display = 'block';
+            userInput.value = data.user;
+            userInput.readOnly = true;
+        }
+        // 【新增】在 modal-info 或表單中動態加入「更改日期」與「更改時段（09:00-18:00，整點）」
+        let editExtraGroup = document.getElementById('modal-edit-extra-fields');
+        if (!editExtraGroup) {
+            editExtraGroup = document.createElement('div');
+            editExtraGroup.id = 'modal-edit-extra-fields';
+            editExtraGroup.className = 'form-group';
+            // 插入在原因欄位上方或下方
+            formGroupReason.parentNode.insertBefore(editExtraGroup, formGroupReason);
+        }
+
+        // 計算目前格子的日期字串 (YYYY-MM-DD)
+        const currentDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+        // 目前時段的開始時間 (例如 "09:00")
+        const currentStartTimeStr = timeslots[tIdx].split(' - ')[0];
+
+        editExtraGroup.innerHTML = `
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 4px; color: var(--text-muted);">更改日期：</label>
+                <input type="date" id="edit-book-date" class="input" value="${currentDateStr}">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 4px; color: var(--text-muted);">更改時段 (09:00 - 18:00，整點)：</label>
+                <select id="edit-book-time" class="input">
+                    <option value="09:00">09:00 - 10:00</option>
+                    <option value="10:00">10:00 - 11:00</option>
+                    <option value="11:00">11:00 - 12:00</option>
+                    <option value="12:00">12:00 - 13:00</option>
+                    <option value="13:00">13:00 - 14:00</option>
+                    <option value="14:00">14:00 - 15:00</option>
+                    <option value="15:00">15:00 - 16:00</option>
+                    <option value="16:00">16:00 - 17:00</option>
+                    <option value="17:00">17:00 - 18:00</option>
+                </select>
+            </div>
+        `;
+
+        // 預先選中原本的時段
+        setTimeout(() => {
+            const timeSelect = document.getElementById('edit-book-time');
+            if (timeSelect) timeSelect.value = currentStartTimeStr;
+        }, 50);
+
+        btn.innerText = '確認修改預約';
+        btn.className = 'btn btn-dark';
+
+        let deleteBtn = document.getElementById('modal-delete-btn');
+        if (!deleteBtn) {
+            deleteBtn = document.createElement('button');
+            deleteBtn.id = 'modal-delete-btn';
+            deleteBtn.className = 'btn btn-line';
+            deleteBtn.style.color = 'var(--color-maintain)';
+            deleteBtn.style.borderColor = 'var(--color-maintain)';
+            deleteBtn.innerText = '刪除此預約';
+            deleteBtn.onclick = deleteBooking;
+            document.querySelector('#modal-booking .modal-footer').prepend(deleteBtn);
+        } else {
+            deleteBtn.style.display = 'inline-flex';
+        }
+    
+    } else {
+        if (currentRole !== 'admin') {
+            alert('【權限限制】您沒有權限解除維護狀態！此操作僅限系統管理者執行。');
+            return;
+        }
+        
+        title.innerText = '解除維護 / 開放預約';
+        info.innerText = `目前狀態：維護中（已關閉預約）`;
+
+        if (formGroupUser) formGroupUser.style.display = 'none';
+        if (formGroupReason) formGroupReason.style.display = 'none';
+
+        btn.innerText = '恢復為可預約';
+        btn.className = 'btn btn-dark';
+        
+
+        
+    }
+}
+
+function submitBooking() {
+    if (!targetCell) return;
+    const data = scheduleData[targetCell] || { status: 'free' };
+
+    if (data.status === 'maintain') {
+
+        
+        delete scheduleData[targetCell];
+        alert('已成功恢復為可預約時段！');
+        closeModal('modal-booking');
+        renderSchedule();
+        return;
+    }
+
+    const user = document.getElementById('book-user').value.trim();
+    const reason = document.getElementById('book-reason').value.trim() || '個人練習';
+
+    if (data.status === 'free') {
+        if (!user) {
+            alert('請輸入預約人姓名');
+            return;
+        }
+        scheduleData[targetCell] = { status: 'booked', user, reason };
+        alert('預約成功！');
+    } else {
+        let updatedUser = data.user;
+        if (currentRole === 'admin') {
+            const teacherSelect = document.getElementById('edit-book-teacher-select');
+            if (teacherSelect && teacherSelect.value) {
+                updatedUser = teacherSelect.value;
+            }
+        } else {
+            const userInputElem = document.getElementById('book-user');
+            if (userInputElem) updatedUser = userInputElem.value.trim();
+        }
+
+        const newDateVal = document.getElementById('edit-book-date')?.value;
+        const newTimeVal = document.getElementById('edit-book-time')?.value;
+        if (newDateVal && newTimeVal) {
+            const newDate = new Date(newDateVal);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (newDate < today) {
+                alert('無法將預約改至過去的日期！');
+                return;
+            }
+
+            const parts = targetCell.split('-');
+            const roomIdx = parseInt(parts[0]);
+            const newWeekNum = getWeekNumber(newDate);
+            const dayOfWeek = newDate.getDay();
+            const newDIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+            const startTimeOnly = newTimeVal.substring(0, 5);
+            let newTIdx = 0;
+            timeslots.forEach((slotStr, idx) => {
+                if (slotStr.startsWith(startTimeOnly)) {
+                    newTIdx = idx;
+                }
+            });
+
+            const newKey = `${roomIdx}-${newWeekNum}-${newTIdx}-${newDIdx}`;
+
+            if (newKey !== targetCell) {
+                const targetExisting = scheduleData[newKey];
+                if (targetExisting && targetExisting.status !== 'free') {
+                    alert('【提示】您選擇的新日期與時段已被其他人預約或維護中，無法變更！');
+                    return;
+                }
+                delete scheduleData[targetCell];
+            }
+
+            // 寫入更新後的教師、日期時段與用途
+            scheduleData[newKey] = {
+                status: 'booked',
+                user: updatedUser,
+                reason: reason
+            };
+
+            alert('預約資訊已成功更新！');
+        } else {
+            scheduleData[targetCell].user = updatedUser;
+            scheduleData[targetCell].reason = reason;
+            alert('預約資訊已成功更新！');
+        }
+    }
+
+    closeModal('modal-booking');
+    renderSchedule();
+    renderTeacherHistory();
+}
+
+function closeBookingSlot() {
+    if (!targetCell) return;
+    if (currentRole !== 'admin') {
+        alert('【權限限制】您沒有權限關閉預約權限！此操作僅限系統管理者執行。');
+        return;
+    }
+    if (confirm('確定要關閉此時段的預約權限嗎？（將設為維護中狀態）')) {
+        scheduleData[targetCell] = { status: 'maintain', user: '系統', reason: '管理者手動關閉' };
+        alert('已成功關閉該時段預約權限！');
+        closeModal('modal-booking');
+        renderSchedule();
+    }
+}
+
+function deleteBooking() {
+    if (!targetCell) return;
+    if (confirm('確定要刪除這筆預約嗎？')) {
+        delete scheduleData[targetCell];
+        alert('已成功刪除預約！');
+        closeModal('modal-booking');
+        renderSchedule();
+        renderTeacherHistory();
+    }
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+    
+    const deleteBtn = document.getElementById('modal-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    
+    const headerBtn = document.getElementById('modal-header-close-btn');
+    if (headerBtn) headerBtn.remove();
+
+    // 清除修改日期/時段的額外欄位
+    const extraFields = document.getElementById('modal-edit-extra-fields');
+    if (extraFields) extraFields.innerHTML = '';
+
+    // 隱藏單格修改的管理者教師選單
+    const adminTeacherGroup = document.getElementById('modal-admin-teacher-group');
+    if (adminTeacherGroup) adminTeacherGroup.style.display = 'none';
+
+    // 隱藏批次預約的管理者教師選單
+    const batchAdminTeacherGroup = document.getElementById('modal-batch-admin-teacher-group');
+    if (batchAdminTeacherGroup) batchAdminTeacherGroup.style.display = 'none';
+
+    // 恢復預設表單顯示
+    const formGroupUser = document.getElementById('book-user')?.closest('.form-group');
+    if (formGroupUser) formGroupUser.style.display = 'block';
+
+    // 還原主按鈕預設行為
+    const btn = document.getElementById('modal-action-btn');
+    if (btn) btn.onclick = submitBooking;
+}
+// 後台面板切換
+function switchAdminTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.remove('active'));
+
+    event.target.classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+function renderTimeTable() {
+    const list = document.getElementById('time-list');
+    if (!list) return;
+    list.innerHTML = timeData.map(t => `
+        <tr>
+            <td>${t.name}</td>
+            <td>${t.start}</td>
+            <td>${t.end}</td>
+            <td><span style="color:${t.status === '開放' ? 'var(--color-free)' : 'var(--color-maintain)'}">${t.status}</span></td>
+            <td>
+                <button class="action-btn" onclick="alert('修改時段：${t.name}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="action-btn delete" onclick="deleteTime(${t.id})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function deleteTime(id) {
+    if (confirm('確定刪除此時段？')) {
+        timeData = timeData.filter(t => t.id !== id);
+        renderTimeTable();
+    }
+}
+
+function openTimeModal() {
+    const name = prompt('請輸入時段名稱：', '新時段');
+    if (name) {
+        timeData.push({ id: Date.now(), name, start: '18:00', end: '19:00', status: '開放' });
+        renderTimeTable();
+    }
+}
+
+function renderUserTable() {
+    const list = document.getElementById('user-list');
+    if (!list) return;
+    list.innerHTML = userData.map(u => `
+        <tr>
+            <td>${u.name}</td>
+            <td>${u.email}</td>
+            <td><strong>${u.role}</strong></td>
+            <td><span style="color:var(--color-free)">${u.status}</span></td>
+            <td>
+                <button class="action-btn" onclick="alert('編輯帳號：${u.name}')"><i class="fa-solid fa-user-pen"></i></button>
+                <button class="action-btn delete" onclick="deleteUser(${u.id})"><i class="fa-solid fa-user-xmark"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function deleteUser(id) {
+    if (confirm('確定刪除此帳號？')) {
+        userData = userData.filter(u => u.id !== id);
+        renderUserTable();
+    }
+}
+
+function openUserModal() {
+    const name = prompt('請輸入姓名：');
+    const email = prompt('請輸入 Email：');
+    const role = prompt('權限角色（教師 / 管理者）：', '教師');
+    if (name && email) {
+        userData.push({ id: Date.now(), name, email, role, status: '啟用' });
+        renderUserTable();
+    }
+}
+
+// -------------------------------------------------------------
+// 渲染教師的歷史預約單（修復編輯與刪除連動）
+// -------------------------------------------------------------
+function renderTeacherHistory() {
+    const historyBody = document.getElementById('teacher-history-body');
+    if (!historyBody) return;
+
+    const roomFilter = document.getElementById('history-room-filter')?.value || 'all';
+    const sortOrder = document.getElementById('history-sort-order')?.value || 'newest';
+    const startDateInput = document.getElementById('history-start-date')?.value;
+    const endDateInput = document.getElementById('history-end-date')?.value;
+    const keyword = document.getElementById('history-search-input')?.value.trim().toLowerCase() || '';
+
+    historyBody.innerHTML = '';
+    let rawRecords = [];
+
+    for (const key in scheduleData) {
+        const data = scheduleData[key];
+        
+        if (data.status === 'booked' && data.user === currentTeacherName) {
+            const parts = key.split('-'); // [roomIdx, weekNum, tIdx, dIdx]
+            const roomIdx = parseInt(parts[0]);
+            const weekNum = parseInt(parts[1]);
+            const tIdx = parseInt(parts[2]);
+            const dIdx = parseInt(parts[3]);
+
+            const roomName = rooms[roomIdx] || '未知琴房';
+            const cellDate = getCellRealDate(weekNum, dIdx);
+            const timeStr = timeslots[tIdx] || '未知時段';
+
+            const endTimeStr = timeStr.split(' - ')[1];
+            const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+            const fullCellDate = new Date(cellDate);
+            fullCellDate.setHours(endHour, endMinute, 0, 0);
+            const isPast = fullCellDate < new Date();
+
+            rawRecords.push({
+                key, // 保留原始單一 key 用於精準編輯與刪除
+                roomIdx,
+                roomName,
+                cellDate,
+                dateStringOnly: cellDate.toISOString().split('T')[0],
+                dateFormatted: `${cellDate.getFullYear()}/${String(cellDate.getMonth()+1).padStart(2, '0')}/${String(cellDate.getDate()).padStart(2, '0')}`,
+                tIdx,
+                reason: data.reason || '無',
+                isPast
+            });
+        }
+    }
+
+    let groupedMap = {};
+    rawRecords.forEach(r => {
+        const gKey = `${r.roomIdx}-${r.dateStringOnly}-${r.reason}`;
+        if (!groupedMap[gKey]) {
+            groupedMap[gKey] = {
+                roomName: r.roomName,
+                cellDate: r.cellDate,
+                dateStringOnly: r.dateStringOnly,
+                dateFormatted: r.dateFormatted,
+                reason: r.reason,
+                isPast: r.isPast,
+                keys: [],
+                tIndices: []
+            };
+        }
+        groupedMap[gKey].keys.push(r.key);
+        groupedMap[gKey].tIndices.push(r.tIdx);
+    });
+
+    let records = [];
+    for (const gKey in groupedMap) {
+        let g = groupedMap[gKey];
+        // 依據 tIndices 排序以找出連續時段
+        let combined = g.tIndices.map((t, idx) => ({ tIdx: t, key: g.keys[idx] }));
+        combined.sort((a, b) => a.tIdx - b.tIdx);
+
+        let chunks = [];
+        let currentChunk = [combined[0]];
+
+        for (let i = 1; i < combined.length; i++) {
+            if (combined[i].tIdx === combined[i - 1].tIdx + 1) {
+                currentChunk.push(combined[i]);
+            } else {
+                chunks.push(currentChunk);
+                currentChunk = [combined[i]];
+            }
+        }
+        chunks.push(currentChunk);
+
+        chunks.forEach(chunk => {
+            const startT = chunk[0].tIdx;
+            const endT = chunk[chunk.length - 1].tIdx;
+            const startTime = timeslots[startT].split(' - ')[0];
+            const endTime = timeslots[endT].split(' - ')[1];
+            
+            // 該區塊涵蓋的所有 keys
+            const chunkKeys = chunk.map(c => c.key);
+
+            records.push({
+                keys: chunkKeys,
+                roomName: g.roomName,
+                cellDate: g.cellDate,
+                dateStringOnly: g.dateStringOnly,
+                dateFormatted: g.dateFormatted,
+                timeStr: `${startTime} - ${endTime}`,
+                sortTIdx: startT,
+                reason: g.reason,
+                isPast: g.isPast
+            });
+        });
+    }
+
+    if (roomFilter !== 'all') {
+        records = records.filter(r => r.roomName === roomFilter);
+    }
+    if (startDateInput) {
+        records = records.filter(r => r.dateStringOnly >= startDateInput);
+    }
+    if (endDateInput) {
+        records = records.filter(r => r.dateStringOnly <= endDateInput);
+    }
+    if (keyword !== '') {
+        records = records.filter(r => r.reason.toLowerCase().includes(keyword));
+    }
+
+    records.sort((a, b) => {
+        const dateDiff = a.cellDate - b.cellDate;
+        if (dateDiff !== 0) {
+            return sortOrder === 'newest' ? -dateDiff : dateDiff;
+        } else {
+            return sortOrder === 'newest' ? (b.sortTIdx - a.sortTIdx) : (a.sortTIdx - b.sortTIdx);
+        }
+    });
+
+    if (records.length === 0) {
+        historyBody.innerHTML = `<tr><td colspan="6" style="padding: 20px; color: var(--text-muted);">查無符合條件的預約記錄</td></tr>`;
+        return;
+    }
+
+    records.forEach(r => {
+        let tr = document.createElement('tr');
+        // 將 keys 轉換成安全傳遞的字串（以逗號分隔）
+        const keysParam = r.keys.join(',');
+
+        tr.innerHTML = `
+            <td><strong>${r.roomName}</strong></td>
+            <td>${r.dateFormatted}</td>
+            <td>${r.timeStr}</td>
+            <td>${r.reason}</td>
+            <td>
+                <span style="color: ${r.isPast ? 'var(--text-muted)' : 'var(--color-free)'}; font-weight: 600;">
+                    ${r.isPast ? '已結束' : '有效預約'}
+                </span>
+            </td>
+            <td>
+                ${r.isPast ? '<span style="color:var(--text-muted); font-size:0.85rem;">已過期無法修改</span>' : `
+                    <button class="action-btn" onclick="editBookingFromHistory('${keysParam}')" title="修改原因"><i class="fa-solid fa-pen"></i></button>
+                    <button class="action-btn delete" onclick="deleteBookingFromHistory('${keysParam}')" title="刪除預約"><i class="fa-solid fa-trash"></i></button>
+                `}
+            </td>
+        `;
+        historyBody.appendChild(tr);
+    });
+
+    updateQuickBookedDatesUI(records);
+}
+
+// 歷史預約單專用：編輯處理（開啟第一個時段的修改彈窗）
+function editBookingFromHistory(keysStr) {
+    const keys = keysStr.split(',');
+    if (keys.length > 0 && keys[0]) {
+        // 直接調用彈窗邏輯，並確保目標為已預約狀態
+        targetCell = keys[0];
+        const data = scheduleData[targetCell];
+        if (!data) return;
+
+        const parts = targetCell.split('-');
+        const cellDate = getCellRealDate(parseInt(parts[1]), parseInt(parts[3]));
+        
+        const modal = document.getElementById('modal-booking');
+        const title = document.getElementById('modal-title');
+        const info = document.getElementById('modal-info');
+        const btn = document.getElementById('modal-action-btn');
+        const userInput = document.getElementById('book-user');
+        const reasonInput = document.getElementById('book-reason');
+        const firstParts = keys[0].split('-');
+        const lastParts = keys[keys.length - 1].split('-');
+        const startTIdx = parseInt(firstParts[2]);
+        const endTIdx = parseInt(lastParts[2]);
+    
+        const startTimeStr = timeslots[startTIdx].split(' - ')[0];
+        const endTimeStr = timeslots[endTIdx].split(' - ')[1];
+        const fullTimeStr = `${startTimeStr} - ${endTimeStr}`;
+
+    
+
+        modal.classList.add('active');
+        title.innerText = '修改預約原因';
+        info.innerText = `預約琴房：${rooms[parseInt(parts[0])]}\n預約日期：${cellDate.getFullYear()}-${cellDate.getMonth()+1}-${cellDate.getDate()}\n預約時段：${fullTimeStr}`;
+        
+        userInput.value = data.user;
+        userInput.readOnly = true;
+        reasonInput.value = data.reason;
+        
+        btn.innerText = '確認修改原因';
+        btn.className = 'btn btn-dark';
+
+        // 綁定儲存時同步更新該區塊所有連續時段的原因
+        btn.onclick = function() {
+            const newReason = reasonInput.value.trim() || '個人練習';
+            keys.forEach(k => {
+                if (scheduleData[k]) {
+                    scheduleData[k].reason = newReason;
+                }
+            });
+            alert('預約原因已成功更新！');
+            closeModal('modal-booking');
+            renderSchedule();
+            renderTeacherHistory();
+            // 還原原本的 submitBooking 綁定避免影響其他地方
+            btn.onclick = submitBooking;
+        };
+    }
+}
+
+// 歷史預約單專用：刪除處理（將該筆記錄包含的所有格子一次刪除）
+function deleteBookingFromHistory(keysStr) {
+    const keys = keysStr.split(',');
+    if (confirm(`確定要從歷史預約單中刪除這筆預約嗎？（共 ${keys.length} 個時段）`)) {
+        keys.forEach(k => {
+            delete scheduleData[k];
+        });
+        alert('已成功刪除預約！');
+        renderSchedule();
+        renderTeacherHistory();
+    }
+}
+
+
+// 歷史預約單專用：更新「快速選擇已預約日期」的 UI
+function updateQuickBookedDatesUI(records) {
+    const container = document.getElementById('quick-booked-dates');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const uniqueDates = [...new Set(records.map(r => r.dateStringOnly))].sort();
+
+    if (uniqueDates.length === 0) {
+        container.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted);">近期無預約記錄</span>';
+        return;
+    }
+
+    uniqueDates.forEach(dateStr => {
+        const parts = dateStr.split('-');
+        const labelStr = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm';
+        btn.style.cssText = `
+            padding: 2px 8px;
+            font-size: 0.8rem;
+            background-color: #E6D5C3;
+            color: #5A4A3B;
+            border: 1px solid #D4BCA5;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        `;
+        btn.innerHTML = `<i class="fa-solid fa-calendar-check" style="margin-right:3px;"></i> ${labelStr}`;
+
+        btn.onclick = () => {
+            document.getElementById('history-start-date').value = dateStr;
+            document.getElementById('history-end-date').value = dateStr;
+            renderTeacherHistory();
+        };
+
+        container.appendChild(btn);
+    });
+}
+
+function clearDateFilter() {
+    const start = document.getElementById('history-start-date');
+    const end = document.getElementById('history-end-date');
+    if (start) start.value = '';
+    if (end) end.value = '';
+    renderTeacherHistory();
+}
+
+function openManualBookingModal() {
+    const modal = document.getElementById('modal-manual-booking');
+    if (!modal) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('manual-date');
+    if (dateInput) dateInput.value = todayStr;
+
+    const timeslotSelect = document.getElementById('manual-timeslot');
+    if (timeslotSelect) timeslotSelect.value = '0';
+
+    const reasonInput = document.getElementById('manual-reason');
+    if (reasonInput) reasonInput.value = '';
+
+    modal.classList.add('active');
+    updateAvailableRoomsForBooking();
+}
+
+function updateAvailableRoomsForBooking() {
+    const dateVal = document.getElementById('manual-date').value;
+    const tIdx = parseInt(document.getElementById('manual-timeslot').value);
+    const roomSelect = document.getElementById('manual-room');
+    const submitBtn = document.getElementById('submit-manual-btn');
+
+    if (!roomSelect) return;
+    roomSelect.innerHTML = '';
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+    }
+
+    if (!dateVal) {
+        roomSelect.innerHTML = '<option value="">請先選擇有效日期</option>';
+        return;
+    }
+
+    const selectedDate = new Date(dateVal);
+    const weekNum = getWeekNumber(selectedDate);
+    let dayOfWeek = selectedDate.getDay();
+    let dIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+    let availableCount = 0;
+    let optionsHtml = '<option value="" disabled selected>-- 請選擇琴房 --</option>';
+
+    rooms.forEach((roomName, roomIdx) => {
+        const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
+        const data = scheduleData[key] || { status: 'free' };
+        const isFree = (data.status === 'free');
+
+        if (isFree) {
+            availableCount++;
+            optionsHtml += `<option value="${roomIdx}">${roomName} (可預約)</option>`;
+        } else {
+            const statusText = data.status === 'maintain' ? '維護中' : `已被 ${data.user} 預約`;
+            optionsHtml += `<option value="${roomIdx}" disabled style="color:#b0b0b0;">${roomName} (${statusText})</option>`;
+        }
+    });
+
+    roomSelect.innerHTML = optionsHtml;
+
+    if (availableCount === 0) {
+        roomSelect.innerHTML = '<option value="" disabled selected>該日期與時段所有琴房皆已滿或維護中</option>';
+    }
+}
+
+function checkManualRoomSelection() {
+    const roomSelect = document.getElementById('manual-room');
+    const submitBtn = document.getElementById('submit-manual-btn');
+    if (!roomSelect || !submitBtn) return;
+
+    if (roomSelect.value !== "") {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+    } else {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+    }
+}
+
+function submitManualBooking() {
+    const roomSelect = document.getElementById('manual-room');
+    const roomIdx = parseInt(roomSelect.value);
+    const dateVal = document.getElementById('manual-date').value;
+    const tIdx = parseInt(document.getElementById('manual-timeslot').value);
+    const reason = document.getElementById('manual-reason').value.trim() || '個人練習';
+
+    if (isNaN(roomIdx)) {
+        alert('請選擇一間有效的琴房！');
+        return;
+    }
+
+    if (!dateVal) {
+        alert('請選擇有效的預約日期！');
+        return;
+    }
+
+    const selectedDate = new Date(dateVal);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+        alert('無法預約過去的日期！');
+        return;
+    }
+
+    const weekNum = getWeekNumber(selectedDate);
+    let dayOfWeek = selectedDate.getDay();
+    let dIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+    const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
+
+    const existing = scheduleData[key];
+    if (existing && existing.status !== 'free') {
+        alert('【提示】此時段剛剛已被其他人預約或進入維護狀態，請重新選擇！');
+        updateAvailableRoomsForBooking();
+        return;
+    }
+
+    scheduleData[key] = {
+        status: 'booked',
+        user: currentTeacherName,
+        reason: reason
+    };
+
+    alert(`成功預約 ${rooms[roomIdx]}！`);
+    closeModal('modal-manual-booking');
+
+    renderSchedule();
+    renderTeacherHistory();
+}
+//4

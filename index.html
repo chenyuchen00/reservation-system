@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>琴房預借系統 - 學生/訪客首頁</title>
+    <!-- 引入 Google 思源宋體與 FontAwesome 圖示 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<!-- ===== 修改部分：在 body 標籤設定目前頁面的角色為 student ===== -->
+<body data-role="student">
+    <!-- 頂部導覽列 -->
+    <nav id="nav">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-title">YU CHEN</span>
+                <span class="logo-sub">PIANOS</span>
+            </div>
+            
+            <ul class="nav-links">
+                <!--<li><a href="#hero">首頁</a></li>-->
+                <li><a href="#schedule">琴房使用一覽表</a></li>
+                <li><a href="#about">關於琴房</a></li>
+            </ul>
+
+            <!-- ===== 修改部分：身份切換改為 HTML 頁面超連結 ===== -->
+            <div class="role-nav">
+                <span class="role-label"><i class="fa-solid fa-user-shield"></i> 身份切換：</span>
+                <a href="index.html" class="role-btn active badge-student">學生 / 訪客</a>
+                <a href="teacher.html" class="role-btn">教師入口</a>
+                <a href="admin.html" class="role-btn">管理者入口</a>
+            </div>
+            <!-- ============================================== -->
+        </div>
+    </nav>
+
+
+    <!-- Hero 主視覺區域 -->
+    <!--
+    <header id="hero">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <span class="hero-tag">琴聲 · 優雅傳承</span>
+            <h1 class="hero-title">MO FAN PIANOS</h1>
+            <p class="hero-desc">提供靜謐典雅的練琴空間，記錄每一次與音樂交心的美好時光。</p>
+            <div class="hero-btns">
+                <a href="#schedule" class="btn btn-dark">查詢琴房時段</a>
+                <a href="#about" class="btn btn-line">瞭解場地規範</a>
+            </div>
+        </div>
+    </header>
+    -->
+
+    <!-- 琴房使用一覽表 (學生唯讀版) -->
+    <section  class="section">
+        <div id="schedule" class="container">
+            <div class="section-header">
+                <span class="section-tag">Pianos Schedule</span>
+                <h2 class="section-title">琴房使用一覽表</h2>
+                <p class="section-desc">提供學生與教職員查詢當週與未來各週琴房預借狀態。</p>
+            </div>
+
+            <div class="filter-bar card">
+                <div class="room-tabs" id="room-tabs"></div>
+                <div class="filter-group">
+                    <button class="filter-btn active" onclick="filterStatus('all')">全部時段</button>
+                    <button class="filter-btn" onclick="filterStatus('free')">可預約</button>
+                    <button class="filter-btn" onclick="filterStatus('booked')">已預約</button>
+                    <button class="filter-btn" onclick="filterStatus('maintain')">維護中</button>
+                </div>
+            </div>
+
+            <div class="schedule-wrapper" style="position: relative;">
+                <!-- 左側切換週數按鈕 -->
+                <button class="week-side-btn week-prev-btn" onclick="changeWeek(-1)">&#10094;</button>
+                
+                <!-- 琴房一覽表表格卡片 -->
+                <div class="card table-box">
+                    <table class="schedule-table">
+                        <thead></thead>
+                        <tbody id="schedule-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- 右側切換週數按鈕 -->
+                <button class="week-side-btn week-next-btn" onclick="changeWeek(1)">&#10095;</button>
+            </div>
+
+            <div class="legend-bar">
+                <span class="legend-item"><i class="dot free"></i> 可預約</span>
+                <span class="legend-item"><i class="dot booked"></i> 已預約</span>
+                <span class="legend-item"><i class="dot maintain"></i> 維護中</span>
+                <!-- ===== 修改部分：學生訪客提示 ===== -->
+                <span class="notice-text"><i class="fa-solid fa-info-circle"></i> 目前為學生/訪客模式，僅供查詢。如需預約請由教師或管理者入口登入。</span>
+                <!-- ================================== -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 關於琴房場地區 -->
+    <section id="about" class="section bg-light">
+        <div class="container grid-2">
+            <div class="about-img">
+                <img src="https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?auto=format&fit=crop&w=800&q=80" alt="琴房環境">
+            </div>
+            <div class="about-text">
+                <span class="section-tag">About Room</span>
+                <h2>優雅、安靜的音樂空間</h2>
+                <p>琴房配備高規格平台鋼琴與隔音工程，提供最優質的練習與教學體驗。請遵循借用規範，共同維護良好的琴房環境。</p>
+                <ul class="about-list">
+                    <li><i class="fa-solid fa-check"></i> 請於預約時段準時入場與離開。</li>
+                    <li><i class="fa-solid fa-check"></i> 琴房內禁止攜帶食物與含糖飲料。</li>
+                    <li><i class="fa-solid fa-check"></i> 使用完畢請隨手關閉電源與琴蓋。</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <footer id="footer">
+        <div class="container footer-content">
+            <div class="footer-logo">
+                <span class="logo-title">MO FAN</span>
+                <p>琴房預借管理系統 &copy; 2026 All Rights Reserved.</p>
+            </div>
+            <div class="footer-links">
+                <a href="#hero">首頁</a>
+                <a href="#schedule">預約一覽</a>
+                <a href="teacher.html">教師入口</a>
+                <a href="admin.html">管理者入口</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

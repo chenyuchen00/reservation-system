@@ -914,45 +914,61 @@ function clickCell(key) {
 }
 
 function submitBooking() {
-    if (!targetCell) return;
+    if (!targetCell) {
+        alert('錯誤：找不到目標時段！');
+        return;
+    }
+    
     const data = scheduleData[targetCell] || { status: 'free' };
 
+    // 如果該時段原本是維護中，執行解除維護
     if (data.status === 'maintain') {
         delete scheduleData[targetCell];
         alert('已成功恢復為可預約時段！');
         closeModal('modal-booking');
         renderSchedule();
+        if (typeof renderDaySchedule === 'function') renderDaySchedule();
         return;
     }
 
+    // 取得使用者與原因（支援新增或修改）
     const userInputElem = document.getElementById('book-user');
-    const user = userInputElem ? userInputElem.value.trim() : currentTeacherName;
+    const teacherSelect = document.getElementById('edit-book-teacher-select');
     const reasonInputElem = document.getElementById('book-reason');
+
+    let user = '';
+    if (currentRole === 'admin' && teacherSelect) {
+        user = teacherSelect.value;
+    } else if (userInputElem) {
+        user = userInputElem.value.trim();
+    } else {
+        user = currentTeacherName || '教師';
+    }
+
     const reason = reasonInputElem ? (reasonInputElem.value.trim() || '個人練習') : '個人練習';
 
+    // 如果原本是空白格子 -> 執行新增預約
     if (data.status === 'free') {
         if (!user) {
             alert('請輸入預約人姓名');
+            if (userInputElem) userInputElem.focus();
             return;
         }
         scheduleData[targetCell] = { status: 'booked', user, reason };
         alert('預約成功！');
-    } else {
-        let updatedUser = data.user;
-        if (currentRole === 'admin') {
-            const teacherSelect = document.getElementById('edit-book-teacher-select');
-            if (teacherSelect && teacherSelect.value) {
-                updatedUser = teacherSelect.value;
-            }
-        } else {
-            if (userInputElem) updatedUser = userInputElem.value.trim();
-        }
+    } 
+    // 如果原本已預約 -> 執行修改預約（支援起訖時間區間）
+    else {
+        const newDateElem = document.getElementById('edit-book-date');
+        const newStartTimeElem = document.getElementById('edit-book-start-time');
+        const newEndTimeElem = document.getElementById('edit-book-end-time');
 
-        const newDateVal = document.getElementById('edit-book-date')?.value;
-        const newStartTimeVal = document.getElementById('edit-book-start-time')?.value;
-        const newEndTimeVal = document.getElementById('edit-book-end-time')?.value;
+        // 如果有開啟修改起訖時間的選單
+        if (newDateElem && newStartTimeElem && newEndTimeElem && newDateElem.value) {
+            const newDateVal = newDateElem.value;
+            const newStartTimeVal = newStartTimeElem.value;
+            const newEndTimeVal = newEndTimeElem.value;
 
-        if (newDateVal && newStartTimeVal && newEndTimeVal) {
             const newDate = new Date(newDateVal);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -966,17 +982,23 @@ function submitBooking() {
             const endH = parseInt(newEndTimeVal.substring(0, 2));
 
             if (endH <= startH) {
-                alert('結束時間必須大於開始時間！');
+                alert('結束時間必須大於或等於開始時間！');
                 return;
             }
 
             const parts = targetCell.split('-');
             const roomIdx = parseInt(parts[0]);
+            const oldWeekNum = parseInt(parts[1]);
+            const oldDIdx = parseInt(parts[3]);
+            const oldUser = data.user;
+            const oldReason = data.reason;
+
+            // 計算新日期的對應週次與星期幾索引
             const newWeekNum = getWeekNumber(newDate);
             const dayOfWeek = newDate.getDay();
             const newDIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
-            // 計算這段連續時間區間涵蓋了哪幾個格子
+            // 根據選擇的小時區間，計算會涵蓋到哪幾個 timeslots 格子
             let targetKeysToBook = [];
             for (let h = startH; h < endH; h++) {
                 const hourSlotStr = `${String(h).padStart(2, '0')}:00`;
@@ -1000,10 +1022,18 @@ function submitBooking() {
                 return;
             }
 
-            // 先暫時將原本的舊預約格子從 scheduleData 移除，避免跟自己重疊衝突
-            delete scheduleData[targetCell];
+            // 先清除這筆預約在原本所有格子中的殘留紀錄
+            Object.keys(scheduleData).forEach(k => {
+                const kp = k.split('-');
+                if (parseInt(kp[0]) === roomIdx && parseInt(kp[1]) === oldWeekNum && parseInt(kp[3]) === oldDIdx) {
+                    const item = scheduleData[k];
+                    if (item && item.status === 'booked' && item.user === oldUser && item.reason === oldReason) {
+                        delete scheduleData[k];
+                    }
+                }
+            });
 
-            // 檢查新選取的格子是否有被其他人佔用
+            // 檢查新選取的格子是否有被其他人佔用（排除自己原本的舊格子）
             let hasConflict = false;
             for (let item of targetKeysToBook) {
                 const existing = scheduleData[item.key];
@@ -1023,15 +1053,16 @@ function submitBooking() {
             targetKeysToBook.forEach(item => {
                 scheduleData[item.key] = {
                     status: 'booked',
-                    user: updatedUser,
+                    user: user,
                     reason: reason
                 };
             });
 
             alert('預約起訖時間與資訊已成功更新！');
         } else {
+            // 如果沒有額外選單，直接更新當前格子的資料
             if (scheduleData[targetCell]) {
-                scheduleData[targetCell].user = updatedUser;
+                scheduleData[targetCell].user = user;
                 scheduleData[targetCell].reason = reason;
             }
             alert('預約資訊已成功更新！');
@@ -1040,7 +1071,8 @@ function submitBooking() {
 
     closeModal('modal-booking');
     renderSchedule();
-    renderTeacherHistory();
+    if (typeof renderDaySchedule === 'function') renderDaySchedule();
+    if (typeof renderTeacherHistory === 'function') renderTeacherHistory();
 }
 
 function closeBookingSlot() {
@@ -1343,57 +1375,8 @@ function renderTeacherHistory() {
 function editBookingFromHistory(keysStr) {
     const keys = keysStr.split(',');
     if (keys.length > 0 && keys[0]) {
-        // 直接調用彈窗邏輯，並確保目標為已預約狀態
-        targetCell = keys[0];
-        const data = scheduleData[targetCell];
-        if (!data) return;
-
-        const parts = targetCell.split('-');
-        const cellDate = getCellRealDate(parseInt(parts[1]), parseInt(parts[3]));
-        
-        const modal = document.getElementById('modal-booking');
-        const title = document.getElementById('modal-title');
-        const info = document.getElementById('modal-info');
-        const btn = document.getElementById('modal-action-btn');
-        const userInput = document.getElementById('book-user');
-        const reasonInput = document.getElementById('book-reason');
-        const firstParts = keys[0].split('-');
-        const lastParts = keys[keys.length - 1].split('-');
-        const startTIdx = parseInt(firstParts[2]);
-        const endTIdx = parseInt(lastParts[2]);
-    
-        const startTimeStr = timeslots[startTIdx].split(' - ')[0];
-        const endTimeStr = timeslots[endTIdx].split(' - ')[1];
-        const fullTimeStr = `${startTimeStr} - ${endTimeStr}`;
-
-    
-
-        modal.classList.add('active');
-        title.innerText = '修改預約原因';
-        info.innerText = `預約琴房：${rooms[parseInt(parts[0])]}\n預約日期：${cellDate.getFullYear()}-${cellDate.getMonth()+1}-${cellDate.getDate()}\n預約時段：${fullTimeStr}`;
-        
-        userInput.value = data.user;
-        userInput.readOnly = true;
-        reasonInput.value = data.reason;
-        
-        btn.innerText = '確認修改原因';
-        btn.className = 'btn btn-dark';
-
-        // 綁定儲存時同步更新該區塊所有連續時段的原因
-        btn.onclick = function() {
-            const newReason = reasonInput.value.trim() || '個人練習';
-            keys.forEach(k => {
-                if (scheduleData[k]) {
-                    scheduleData[k].reason = newReason;
-                }
-            });
-            alert('預約原因已成功更新！');
-            closeModal('modal-booking');
-            renderSchedule();
-            renderTeacherHistory();
-            // 還原原本的 submitBooking 綁定避免影響其他地方
-            btn.onclick = submitBooking;
-        };
+        // 直接觸發點擊該預約區塊的第一個格子，開啟標準的「修改/刪除預約」Modal
+        clickCell(keys[0]);
     }
 }
 

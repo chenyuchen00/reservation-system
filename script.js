@@ -1750,8 +1750,6 @@ function renderWeeklyCloseTable() {
     list.innerHTML = weeklyClosedRules.map(rule => {
         const dayStr = daysName[rule.dayOfWeek];
         const timeStr = `${dayStr} ${rule.startTime} - ${rule.endTime}`;
-        
-        // 如果狀態是「關閉」，開關為勾選(true)；如果是「開放」，則為不勾選(false)
         const isChecked = rule.status === '關閉' ? 'checked' : '';
 
         return `
@@ -1768,6 +1766,10 @@ function renderWeeklyCloseTable() {
                     </span>
                 </td>
                 <td>
+                    <!-- 新增編輯按鈕 -->
+                    <button class="action-btn" onclick="openEditWeeklyCloseModal(${rule.id})" title="編輯規則" style="margin-right: 8px;">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
                     <button class="action-btn delete" onclick="deleteWeeklyCloseRule(${rule.id})" title="刪除規則">
                         <i class="fa-solid fa-trash"></i>
                     </button>
@@ -1788,6 +1790,80 @@ function toggleWeeklyCloseStatus(id) {
     }
 }
 
+// 點擊「新增關閉時段」按鈕
+function openWeeklyCloseModal() {
+    const modal = document.getElementById('modal-weekly-close');
+    if (!modal) return;
+
+    document.getElementById('weekly-close-modal-title').innerText = '新增每週關閉時段';
+    document.getElementById('edit-rule-id').value = ''; // 清空代表新增
+    document.getElementById('weekly-room').value = '琴房 A';
+    document.getElementById('weekly-day').value = '3'; // 預設週三
+    document.getElementById('weekly-start-time').value = '13:00';
+    document.getElementById('weekly-end-time').value = '18:00';
+
+    modal.classList.add('active');
+}
+
+// 點擊表格中的「編輯」按鈕
+function openEditWeeklyCloseModal(id) {
+    const rule = weeklyClosedRules.find(r => r.id === id);
+    if (!rule) return;
+
+    const modal = document.getElementById('modal-weekly-close');
+    if (!modal) return;
+
+    document.getElementById('weekly-close-modal-title').innerText = '編輯每週關閉時段';
+    document.getElementById('edit-rule-id').value = rule.id;
+    document.getElementById('weekly-room').value = rule.room;
+    document.getElementById('weekly-day').value = rule.dayOfWeek;
+    document.getElementById('weekly-start-time').value = rule.startTime;
+    document.getElementById('weekly-end-time').value = rule.endTime;
+
+    modal.classList.add('active');
+}
+
+// 提交（儲存新增或修改）
+function submitWeeklyCloseRule() {
+    const editId = document.getElementById('edit-rule-id').value;
+    const room = document.getElementById('weekly-room').value;
+    const dayOfWeek = parseInt(document.getElementById('weekly-day').value);
+    const startTime = document.getElementById('weekly-start-time').value;
+    const endTime = document.getElementById('weekly-end-time').value;
+
+    if (endTime <= startTime) {
+        alert('結束時間必須大於開始時間！');
+        return;
+    }
+
+    if (editId) {
+        // 修改現有規則
+        const rule = weeklyClosedRules.find(r => r.id === parseInt(editId));
+        if (rule) {
+            rule.room = room;
+            rule.dayOfWeek = dayOfWeek;
+            rule.startTime = startTime;
+            rule.endTime = endTime;
+        }
+        alert('每週關閉時段已成功更新！');
+    } else {
+        // 新增規則
+        weeklyClosedRules.push({
+            id: Date.now(),
+            room: room,
+            dayOfWeek: dayOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            status: '關閉'
+        });
+        alert('成功新增每週關閉時段！');
+    }
+
+    closeModal('modal-weekly-close');
+    renderWeeklyCloseTable();
+    if (typeof renderSchedule === 'function') renderSchedule();
+}
+
 // 刪除每週關閉規則
 function deleteWeeklyCloseRule(id) {
     if (confirm('確定要刪除此項每週關閉時段設定嗎？')) {
@@ -1797,31 +1873,5 @@ function deleteWeeklyCloseRule(id) {
     }
 }
 
-// 新增每週關閉時段對話框 (可依需求使用 prompt 或自訂 modal)
-function openWeeklyCloseModal() {
-    const roomInput = prompt('請輸入琴房名稱 (例如: 琴房 B)：', '琴房 B');
-    if (!roomInput) return;
 
-    const dayInput = prompt('請輸入星期幾 (0=週日, 1=週一, 2=週二, 3=週三, 4=週四, 5=週五, 6=週六)：', '3');
-    if (dayInput === null) return;
-
-    const startInput = prompt('請輸入開始時間 (例如 13:00)：', '13:00');
-    if (!startInput) return;
-
-    const endInput = prompt('請輸入結束時間 (例如 18:00)：', '18:00');
-    if (!endInput) return;
-
-    weeklyClosedRules.push({
-        id: Date.now(),
-        room: roomInput,
-        dayOfWeek: parseInt(dayInput),
-        startTime: startInput,
-        endTime: endInput,
-        status: '關閉'
-    });
-
-    renderWeeklyCloseTable();
-    if (typeof renderSchedule === 'function') renderSchedule();
-    alert('成功新增每週關閉時段設定！');
-}
 //4

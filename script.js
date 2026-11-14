@@ -5,6 +5,8 @@ const timeslots = [
     '15:00 - 16:00', '16:00 - 17:00', '17:00 - 18:00'
 ];
 
+
+
 let currentRole = 'student';
 const currentTeacherName = '楊老師';
 let curRoom = 0;
@@ -73,10 +75,9 @@ let scheduleData = {
     '0-47-8-4': { status: 'maintain', user: '系統', reason: '定期調音維護' }
 };
 
-let timeData = [
-    { id: 1, name: '早晨時段 A', start: '09:00', end: '12:00', status: '開放' },
-    { id: 2, name: '下午時段 B', start: '12:00', end: '17:00', status: '開放' },
-    { id: 3, name: '晚間時段 C', start: '17:00', end: '21:00', status: '不開放' }
+// 每週固定關閉時段設定範例
+let weeklyClosedRules = [
+    { id: 1, room: '琴房 B', dayOfWeek: 3, startTime: '13:00', endTime: '18:00', status: '關閉' } // dayOfWeek: 3 代表週三
 ];
 
 let userData = [
@@ -108,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('time-list')) renderTimeTable();
     if (document.getElementById('user-list')) renderUserTable();
+    if (document.getElementById('weekly-close-list')) renderWeeklyCloseTable();
 });
 
 function renderRooms() {
@@ -545,12 +547,29 @@ function renderSchedule() {
 
             const key = `${curRoom}-${weekNum}-${tIdx}-${dIdx}`;
             const data = scheduleData[key] || { status: 'free' };
+            const roomName = rooms[curRoom];
+            const dayOfWeek = cellDate.getDay(); // 0(日) ~ 6(六)
+            const timeSlotStr = timeslots[tIdx]; // 例如 "13:00 - 14:00"
+            const slotStartHourStr = timeSlotStr.split(' - ')[0]; // "13:00"
+
+            let isWeeklyClosed = false;
+            weeklyClosedRules.forEach(rule => {
+                if (rule.status === '關閉' && rule.room === roomName && rule.dayOfWeek === dayOfWeek) {
+                    // 比對該時段是否落在規則的開始與結束時間之間
+                    if (slotStartHourStr >= rule.startTime && slotStartHourStr < rule.endTime) {
+                        isWeeklyClosed = true;
+                    }
+                }
+            });
 
             let text = '可預約';
             let cellClass = 'cell-free';
             const isSelectedInBatch = selectedBatchCells.includes(key);
 
-            if (isPastTime) {
+            if (isWeeklyClosed) {
+                text = '維護中'; // 或顯示 "關閉"
+                cellClass = 'cell-maintain';
+            } else if (isPastTime) {
                 const isMyBooking = (currentRole === 'teacher' && data.status === 'booked' && data.user === currentTeacherName);
                 if (isMyBooking) {
                     text = `您的預約<br><small style="color:var(--text-muted);">(已結束)</small>`;
@@ -644,6 +663,25 @@ function renderSchedule() {
 
 // 點擊格子總入口（隨時可點擊多個空白格子進行複選）
 function handleCellClick(key) {
+    const parts = key.split('-');
+    const roomIdx = parseInt(parts[0]);
+    const weekNum = parseInt(parts[1]);
+    const tIdx = parseInt(parts[2]);
+    const dIdx = parseInt(parts[3]);
+
+    const cellDate = getCellRealDate(weekNum, dIdx);
+
+    // 【共用檢查】是否為每週關閉時段
+    const closedRule = checkIsWeeklyClosed(roomIdx, cellDate, tIdx);
+    if (closedRule) {
+        if (currentRole === 'admin') {
+            alert('【提示】此時段為「每週固定關閉時段」，若需開放請至下方「系統管理區 > 每週關閉時段設定」進行調整。');
+        } else {
+            alert('【權限限制】此時段為固定關閉維護時段，無法預約！');
+        }
+        return;
+    }
+
     const data = scheduleData[key] || { status: 'free' };
     if (currentRole === 'student') {
         alert('【提示】目前為學生/訪客模式，無預約權限。請點擊右上角「教師入口」或「管理者入口」。');
@@ -651,20 +689,12 @@ function handleCellClick(key) {
     }
 
     if (data.status === 'free') {
-        const parts = key.split('-');
-        const weekNum = parseInt(parts[1]);
-        const tIdx = parseInt(parts[2]);
-        const dIdx = parseInt(parts[3]);
-
-        // 取得該格子的真實日期與「開始時間」
-        const cellDate = getCellRealDate(weekNum, dIdx);
-        const startTimeStr = timeslots[tIdx].split(' - ')[0]; // 取開始時間 (例如 09:00)
+        // ... 後續原本的空白格子點擊邏輯保持不變
+        const startTimeStr = timeslots[tIdx].split(' - ')[0];
         const [startHour, startMinute] = startTimeStr.split(':').map(Number);
         cellDate.setHours(startHour, startMinute, 0, 0);
 
-        const today = new Date(); // 當前即時時間（包含時、分）
-
-        // 只要該時段的開始時間小於現在時間，就視為已過期
+        const today = new Date();
         if (cellDate < today) {
             alert('【提示】此時段已過期（今天以前或今日已結束），無法進行預約或修改。');
             return;
@@ -683,6 +713,23 @@ function handleCellClick(key) {
     clickCell(key);
 }
 
+// 檢查指定日期與時段是否被每週固定關閉規則涵蓋
+function checkIsWeeklyClosed(roomIdx, cellDate, tIdx) {
+    const roomName = rooms[roomIdx];
+    const dayOfWeek = cellDate.getDay(); // 0(日) ~ 6(六)
+    const slotStartHourStr = timeslots[tIdx].split(' - ')[0];
+
+    let matchedRule = null;
+    weeklyClosedRules.forEach(rule => {
+        if (rule.status === '關閉' && rule.room === roomName && rule.dayOfWeek === dayOfWeek) {
+            if (slotStartHourStr >= rule.startTime && slotStartHourStr < rule.endTime) {
+                matchedRule = rule;
+            }
+        }
+    });
+    return matchedRule;
+}
+
 // 點擊時段邏輯 (一般彈窗檢視/修改)
 function clickCell(key) {
     const parts = key.split('-');
@@ -691,6 +738,18 @@ function clickCell(key) {
     const dIdx = parseInt(parts[3]);
 
     const cellDate = getCellRealDate(weekNum, dIdx);
+
+    // 【共用檢查】是否為每週關閉時段
+    const closedRule = checkIsWeeklyClosed(parseInt(parts[0]), cellDate, tIdx);
+    if (closedRule) {
+        if (currentRole === 'admin') {
+            alert('【提示】此時段為「每週固定關閉時段」，若需開放請至下方「系統管理區 > 每週關閉時段設定」進行調整。');
+        } else {
+            alert('【權限限制】此時段為固定關閉維護時段，無法預約！');
+        }
+        return;
+    }
+    
     const startTimeStr = timeslots[tIdx].split(' - ')[0];
     const [startHour, startMinute] = startTimeStr.split(':').map(Number);
     cellDate.setHours(startHour, startMinute, 0, 0);
@@ -1674,5 +1733,91 @@ function submitManualBooking() {
 
     renderSchedule();
     renderTeacherHistory();
+}
+
+// 渲染每週關閉時段表格
+function renderWeeklyCloseTable() {
+    const list = document.getElementById('weekly-close-list');
+    if (!list) return;
+
+    const daysName = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+    if (weeklyClosedRules.length === 0) {
+        list.innerHTML = `<tr><td colspan="4" style="padding: 20px; color: var(--text-muted);">目前無每週關閉時段設定</td></tr>`;
+        return;
+    }
+
+    list.innerHTML = weeklyClosedRules.map(rule => {
+        const dayStr = daysName[rule.dayOfWeek];
+        const timeStr = `${dayStr} ${rule.startTime} - ${rule.endTime}`;
+        const isClosed = rule.status === '關閉';
+
+        return `
+            <tr>
+                <td><strong>${rule.room}</strong></td>
+                <td>${timeStr}</td>
+                <td>
+                    <button class="btn btn-sm ${isClosed ? 'btn-line' : 'btn-dark'}" 
+                        style="color: ${isClosed ? 'var(--color-maintain)' : 'var(--color-free)'}; border-color: currentColor;"
+                        onclick="toggleWeeklyCloseStatus(${rule.id})">
+                        ${rule.status} [點擊切換]
+                    </button>
+                </td>
+                <td>
+                    <button class="action-btn delete" onclick="deleteWeeklyCloseRule(${rule.id})" title="刪除規則">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// 切換開放/關閉狀態
+function toggleWeeklyCloseStatus(id) {
+    const rule = weeklyClosedRules.find(r => r.id === id);
+    if (rule) {
+        rule.status = rule.status === '關閉' ? '開放' : '關閉';
+        renderWeeklyCloseTable();
+        // 若一覽表有用到此規則，此處可呼叫 renderSchedule() 更新畫面
+        if (typeof renderSchedule === 'function') renderSchedule();
+    }
+}
+
+// 刪除每週關閉規則
+function deleteWeeklyCloseRule(id) {
+    if (confirm('確定要刪除此項每週關閉時段設定嗎？')) {
+        weeklyClosedRules = weeklyClosedRules.filter(r => r.id !== id);
+        renderWeeklyCloseTable();
+        if (typeof renderSchedule === 'function') renderSchedule();
+    }
+}
+
+// 新增每週關閉時段對話框 (可依需求使用 prompt 或自訂 modal)
+function openWeeklyCloseModal() {
+    const roomInput = prompt('請輸入琴房名稱 (例如: 琴房 B)：', '琴房 B');
+    if (!roomInput) return;
+
+    const dayInput = prompt('請輸入星期幾 (0=週日, 1=週一, 2=週二, 3=週三, 4=週四, 5=週五, 6=週六)：', '3');
+    if (dayInput === null) return;
+
+    const startInput = prompt('請輸入開始時間 (例如 13:00)：', '13:00');
+    if (!startInput) return;
+
+    const endInput = prompt('請輸入結束時間 (例如 18:00)：', '18:00');
+    if (!endInput) return;
+
+    weeklyClosedRules.push({
+        id: Date.now(),
+        room: roomInput,
+        dayOfWeek: parseInt(dayInput),
+        startTime: startInput,
+        endTime: endInput,
+        status: '關閉'
+    });
+
+    renderWeeklyCloseTable();
+    if (typeof renderSchedule === 'function') renderSchedule();
+    alert('成功新增每週關閉時段設定！');
 }
 //4

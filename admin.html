@@ -86,8 +86,8 @@
         <div class="container">
             <div class="section-header">
                 <span class="section-tag">System Settings</span>
-                <h2 class="section-title">時段與帳號權限管理</h2>
-                <p class="section-desc">新增、修改、刪除開放時段與人員權限帳號。</p>
+                <h2 class="section-title">帳號權限管理</h2>
+                <p class="section-desc">新增、修改、刪除人員權限帳號。</p>
             </div>
 
             <div class="admin-tabs">
@@ -98,21 +98,21 @@
             <!-- 時段管理面板 -->
             <div id="tab-times" class="admin-panel card active">
                 <div class="panel-header">
-                    <h3>每週開放時段設定</h3>
-                    <button class="btn btn-dark" onclick="openTimeModal()"><i class="fa-solid fa-plus"></i>
-                        新增時段</button>
+                    <h3>每週關閉時段設定</h3>
+                    <button class="btn btn-dark" onclick="openWeeklyCloseModal()"><i class="fa-solid fa-plus"></i> 新增關閉時段</button>
                 </div>
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>時段名稱</th>
-                            <th>開始時間</th>
-                            <th>結束時間</th>
+                            <th>琴房</th>
+                            <th>關閉時段</th>
                             <th>開放狀態</th>
                             <th>操作選項</th>
                         </tr>
                     </thead>
-                    <tbody id="time-list"></tbody>
+                    <tbody id="weekly-close-list">
+                        <!-- 動態渲染每週關閉時段設定 -->
+                    </tbody>
                 </table>
             </div>
 

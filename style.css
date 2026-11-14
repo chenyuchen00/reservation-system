@@ -447,3 +447,72 @@ body[data-role="admin"] .cell:hover {
 .form-group label { display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
 .input { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.9rem; outline: none; }
 .modal-footer { padding: 15px 20px; background: #F9F6F0; display: flex; justify-content: flex-end; gap: 10px; }
+
+/* 雙時間選擇器容器 (開始與結束) */
+.time-picker-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.custom-time-picker {
+    position: relative;
+    width: 100%;
+}
+
+.custom-time-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.custom-time-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1050;
+    margin-top: 4px;
+    padding: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.custom-time-dropdown.active {
+    display: block;
+}
+
+.custom-time-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.custom-time-option {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.custom-time-option:hover {
+    background-color: #F3EAE0;
+    color: var(--accent-dark);
+    font-weight: 600;
+}

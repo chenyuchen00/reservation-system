@@ -216,7 +216,7 @@
                             <option value="15:00">15:00</option>
                             <option value="16:00">16:00</option>
                             <option value="17:00">17:00</option>
-                            
+
                         </select>
                         <span style="color: var(--text-muted); font-weight: bold;">—</span>
                         <select id="weekly-end-time" class="input">
@@ -229,7 +229,7 @@
                             <option value="16:00">16:00</option>
                             <option value="17:00">17:00</option>
                             <option value="18:00">18:00</option>
-                            
+
                         </select>
                     </div>
                 </div>
@@ -237,6 +237,44 @@
             <div class="modal-footer">
                 <button class="btn btn-line" onclick="closeModal('modal-weekly-close')">取消</button>
                 <button class="btn btn-dark" onclick="submitWeeklyCloseRule()">確認儲存</button>
+            </div>
+        </div>
+    </div>
+    <!-- 彈出視窗：新增/編輯帳號 -->
+    <div id="modal-user-manage" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="user-modal-title">新增帳號</h3>
+                <button class="close-btn" onclick="closeModal('modal-user-manage')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-user-id">
+                <div class="form-group">
+                    <label>姓名：</label>
+                    <input type="text" id="user-name-input" class="input" placeholder="例如：王老師" required>
+                </div>
+                <div class="form-group">
+                    <label>帳號 (Email)：</label>
+                    <input type="email" id="user-email-input" class="input" placeholder="例如：wang@music.edu" required>
+                </div>
+                <div class="form-group">
+                    <label>權限角色：</label>
+                    <select id="user-role-select" class="input">
+                        <option value="教師">教師</option>
+                        <option value="管理者">管理者</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>帳號狀態：</label>
+                    <select id="user-status-select" class="input">
+                        <option value="啟用">啟用</option>
+                        <option value="停用">停用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-line" onclick="closeModal('modal-user-manage')">取消</button>
+                <button class="btn btn-dark" onclick="submitUserForm()">確認儲存</button>
             </div>
         </div>
     </div>

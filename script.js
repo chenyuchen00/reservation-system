@@ -1243,7 +1243,6 @@ function openTimeModal() {
         renderTimeTable();
     }
 }
-
 function renderUserTable() {
     const list = document.getElementById('user-list');
     if (!list) return;
@@ -1252,10 +1251,11 @@ function renderUserTable() {
             <td>${u.name}</td>
             <td>${u.email}</td>
             <td><strong>${u.role}</strong></td>
-            <td><span style="color:var(--color-free)">${u.status}</span></td>
+            <td><span style="color:${u.status === '啟用' ? 'var(--color-free)' : 'var(--color-maintain)'}">${u.status || '啟用'}</span></td>
             <td>
-                <button class="action-btn" onclick="alert('編輯帳號：${u.name}')"><i class="fa-solid fa-user-pen"></i></button>
-                <button class="action-btn delete" onclick="deleteUser(${u.id})"><i class="fa-solid fa-user-xmark"></i></button>
+                <!-- 修改這裡，點擊時帶入 u.id 開啟編輯 Modal -->
+                <button class="action-btn" onclick="openEditUserModal(${u.id})" title="編輯帳號"><i class="fa-solid fa-user-pen"></i></button>
+                <button class="action-btn delete" onclick="deleteUser(${u.id})" title="刪除帳號"><i class="fa-solid fa-user-xmark"></i></button>
             </td>
         </tr>
     `).join('');
@@ -1268,14 +1268,76 @@ function deleteUser(id) {
     }
 }
 
+// 點擊「新增帳號」按鈕
 function openUserModal() {
-    const name = prompt('請輸入姓名：');
-    const email = prompt('請輸入 Email：');
-    const role = prompt('權限角色（教師 / 管理者）：', '教師');
-    if (name && email) {
-        userData.push({ id: Date.now(), name, email, role, status: '啟用' });
-        renderUserTable();
+    const modal = document.getElementById('modal-user-manage');
+    if (!modal) return;
+
+    document.getElementById('user-modal-title').innerText = '新增帳號';
+    document.getElementById('edit-user-id').value = ''; // 清空代表新增
+    document.getElementById('user-name-input').value = '';
+    document.getElementById('user-email-input').value = '';
+    document.getElementById('user-role-select').value = '教師';
+    document.getElementById('user-status-select').value = '啟用';
+
+    modal.classList.add('active');
+}
+
+// 點擊帳號列表中的「編輯」按鈕
+function openEditUserModal(id) {
+    const user = userData.find(u => u.id === id);
+    if (!user) return;
+
+    const modal = document.getElementById('modal-user-manage');
+    if (!modal) return;
+
+    document.getElementById('user-modal-title').innerText = '編輯帳號權限';
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('user-name-input').value = user.name;
+    document.getElementById('user-email-input').value = user.email;
+    document.getElementById('user-role-select').value = user.role;
+    document.getElementById('user-status-select').value = user.status || '啟用';
+
+    modal.classList.add('active');
+}
+
+// 提交（儲存新增或修改的帳號）
+function submitUserForm() {
+    const editId = document.getElementById('edit-user-id').value;
+    const name = document.getElementById('user-name-input').value.trim();
+    const email = document.getElementById('user-email-input').value.trim();
+    const role = document.getElementById('user-role-select').value;
+    const status = document.getElementById('user-status-select').value;
+
+    if (!name || !email) {
+        alert('請完整填寫姓名與 Email！');
+        return;
     }
+
+    if (editId) {
+        // 修改現有帳號
+        const user = userData.find(u => u.id === parseInt(editId));
+        if (user) {
+            user.name = name;
+            user.email = email;
+            user.role = role;
+            user.status = status;
+        }
+        alert('帳號資料已成功更新！');
+    } else {
+        // 新增帳號
+        userData.push({
+            id: Date.now(),
+            name: name,
+            email: email,
+            role: role,
+            status: status
+        });
+        alert('成功新增帳號！');
+    }
+
+    closeModal('modal-user-manage');
+    renderUserTable();
 }
 
 // -------------------------------------------------------------

@@ -749,7 +749,7 @@ function clickCell(key) {
         }
         return;
     }
-    
+
     const startTimeStr = timeslots[tIdx].split(' - ')[0];
     const [startHour, startMinute] = startTimeStr.split(':').map(Number);
     cellDate.setHours(startHour, startMinute, 0, 0);
@@ -1750,18 +1750,22 @@ function renderWeeklyCloseTable() {
     list.innerHTML = weeklyClosedRules.map(rule => {
         const dayStr = daysName[rule.dayOfWeek];
         const timeStr = `${dayStr} ${rule.startTime} - ${rule.endTime}`;
-        const isClosed = rule.status === '關閉';
+        
+        // 如果狀態是「關閉」，開關為勾選(true)；如果是「開放」，則為不勾選(false)
+        const isChecked = rule.status === '關閉' ? 'checked' : '';
 
         return `
             <tr>
                 <td><strong>${rule.room}</strong></td>
                 <td>${timeStr}</td>
                 <td>
-                    <button class="btn btn-sm ${isClosed ? 'btn-line' : 'btn-dark'}" 
-                        style="color: ${isClosed ? 'var(--color-maintain)' : 'var(--color-free)'}; border-color: currentColor;"
-                        onclick="toggleWeeklyCloseStatus(${rule.id})">
-                        ${rule.status} [點擊切換]
-                    </button>
+                    <label class="switch">
+                        <input type="checkbox" ${isChecked} onchange="toggleWeeklyCloseStatus(${rule.id})">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="margin-left: 8px; font-size: 0.85rem; color: var(--text-muted);">
+                        ${rule.status === '關閉' ? '已關閉時段' : '時段開放中'}
+                    </span>
                 </td>
                 <td>
                     <button class="action-btn delete" onclick="deleteWeeklyCloseRule(${rule.id})" title="刪除規則">

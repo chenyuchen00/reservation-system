@@ -971,16 +971,31 @@ function submitBooking() {
 
             const newDate = new Date(newDateVal);
             const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            
+            const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
 
-            if (newDate < today) {
+            if (newDateOnly < todayDateOnly) {
                 alert('無法將預約改至過去的日期！');
                 return;
             }
 
+            // 【新增】檢查今天已過的時段
+            if (newDateOnly.getTime() === todayDateOnly.getTime()) {
+                const startH = parseInt(newStartTimeVal.substring(0, 2));
+                const startM = parseInt(newStartTimeVal.substring(3, 5)) || 0;
+                
+                const slotStartTime = new Date(newDate);
+                slotStartTime.setHours(startH, startM, 0, 0);
+
+                if (slotStartTime < today) {
+                    alert('無法將預約改至今天已經過去的時段！');
+                    return;
+                }
+            }
+
             const startH = parseInt(newStartTimeVal.substring(0, 2));
             const endH = parseInt(newEndTimeVal.substring(0, 2));
-
             if (endH <= startH) {
                 alert('結束時間必須大於或等於開始時間！');
                 return;
@@ -1452,8 +1467,11 @@ function openManualBookingModal() {
     const dateInput = document.getElementById('manual-date');
     if (dateInput) dateInput.value = todayStr;
 
-    const timeslotSelect = document.getElementById('manual-timeslot');
-    if (timeslotSelect) timeslotSelect.value = '0';
+    // 【修改】初始化起訖時間預設值
+    const startTimeSelect = document.getElementById('manual-start-time');
+    const endTimeSelect = document.getElementById('manual-end-time');
+    if (startTimeSelect) startTimeSelect.value = '09:00';
+    if (endTimeSelect) endTimeSelect.value = '10:00';
 
     const reasonInput = document.getElementById('manual-reason');
     if (reasonInput) reasonInput.value = '';
@@ -1464,7 +1482,9 @@ function openManualBookingModal() {
 
 function updateAvailableRoomsForBooking() {
     const dateVal = document.getElementById('manual-date').value;
-    const tIdx = parseInt(document.getElementById('manual-timeslot').value);
+    const startTimeVal = document.getElementById('manual-start-time')?.value || '09:00';
+    const endTimeVal = document.getElementById('manual-end-time')?.value || '10:00';
+    
     const roomSelect = document.getElementById('manual-room');
     const submitBtn = document.getElementById('submit-manual-btn');
 
@@ -1481,32 +1501,64 @@ function updateAvailableRoomsForBooking() {
         return;
     }
 
+    const startH = parseInt(startTimeVal.substring(0, 2));
+    const endH = parseInt(endTimeVal.substring(0, 2));
+
+    if (endH <= startH) {
+        roomSelect.innerHTML = '<option value="" disabled selected>結束時間必須大於開始時間</option>';
+        return;
+    }
+
     const selectedDate = new Date(dateVal);
     const weekNum = getWeekNumber(selectedDate);
     let dayOfWeek = selectedDate.getDay();
     let dIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
+    // 計算這段連續時間區間會涵蓋到哪幾個 tIdx
+    let targetTIndices = [];
+    for (let h = startH; h < endH; h++) {
+        const hourSlotStr = `${String(h).padStart(2, '0')}:00`;
+        let foundTIdx = -1;
+        timeslots.forEach((slotStr, idx) => {
+            if (slotStr.startsWith(hourSlotStr)) {
+                foundTIdx = idx;
+            }
+        });
+        if (foundTIdx !== -1) {
+            targetTIndices.push(foundTIdx);
+        }
+    }
+
     let availableCount = 0;
     let optionsHtml = '<option value="" disabled selected>-- 請選擇琴房 --</option>';
 
     rooms.forEach((roomName, roomIdx) => {
-        const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
-        const data = scheduleData[key] || { status: 'free' };
-        const isFree = (data.status === 'free');
+        // 檢查該琴房在所選的「所有連續時段」是否皆為 free
+        let isAllFree = true;
+        let conflictReason = '';
 
-        if (isFree) {
+        for (let tIdx of targetTIndices) {
+            const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
+            const data = scheduleData[key] || { status: 'free' };
+            if (data.status !== 'free') {
+                isAllFree = false;
+                conflictReason = data.status === 'maintain' ? '維護中' : `已被 ${data.user} 預約`;
+                break;
+            }
+        }
+
+        if (isAllFree && targetTIndices.length > 0) {
             availableCount++;
             optionsHtml += `<option value="${roomIdx}">${roomName} (可預約)</option>`;
         } else {
-            const statusText = data.status === 'maintain' ? '維護中' : `已被 ${data.user} 預約`;
-            optionsHtml += `<option value="${roomIdx}" disabled style="color:#b0b0b0;">${roomName} (${statusText})</option>`;
+            optionsHtml += `<option value="${roomIdx}" disabled style="color:#b0b0b0;">${roomName} (${conflictReason || '時段已被佔用'})</option>`;
         }
     });
 
     roomSelect.innerHTML = optionsHtml;
 
     if (availableCount === 0) {
-        roomSelect.innerHTML = '<option value="" disabled selected>該日期與時段所有琴房皆已滿或維護中</option>';
+        roomSelect.innerHTML = '<option value="" disabled selected>該日期與起訖時段所有琴房皆已滿或維護中</option>';
     }
 }
 
@@ -1528,7 +1580,11 @@ function submitManualBooking() {
     const roomSelect = document.getElementById('manual-room');
     const roomIdx = parseInt(roomSelect.value);
     const dateVal = document.getElementById('manual-date').value;
-    const tIdx = parseInt(document.getElementById('manual-timeslot').value);
+    
+    // 【修改】讀取起訖時間
+    const startTimeVal = document.getElementById('manual-start-time')?.value;
+    const endTimeVal = document.getElementById('manual-end-time')?.value;
+    
     const reason = document.getElementById('manual-reason').value.trim() || '個人練習';
 
     if (isNaN(roomIdx)) {
@@ -1536,17 +1592,42 @@ function submitManualBooking() {
         return;
     }
 
-    if (!dateVal) {
-        alert('請選擇有效的預約日期！');
+    if (!dateVal || !startTimeVal || !endTimeVal) {
+        alert('請完整選擇日期與起訖時段！');
         return;
     }
 
     const selectedDate = new Date(dateVal);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = new Date(); // 當前即時時間（含時、分）
+    
+    // 建立純日期物件（去除時分秒，用於比較日期是否為過去）
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
 
-    if (selectedDate < today) {
+    if (selectedDateOnly < todayDateOnly) {
         alert('無法預約過去的日期！');
+        return;
+    }
+
+    // 【新增】如果選擇的是今天，需進一步檢查開始時間是否已經過了目前時間
+    if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+        const startH = parseInt(startTimeVal.substring(0, 2));
+        const startM = parseInt(startTimeVal.substring(3, 5)) || 0;
+        
+        const slotStartTime = new Date(selectedDate);
+        slotStartTime.setHours(startH, startM, 0, 0);
+
+        if (slotStartTime < today) {
+            alert('無法預約今天已經過去的時段！');
+            return;
+        }
+    }
+
+    const startH = parseInt(startTimeVal.substring(0, 2));
+    const endH = parseInt(endTimeVal.substring(0, 2));
+
+    if (endH <= startH) {
+        alert('結束時間必須大於開始時間！');
         return;
     }
 
@@ -1554,22 +1635,41 @@ function submitManualBooking() {
     let dayOfWeek = selectedDate.getDay();
     let dIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
-    const key = `${roomIdx}-${weekNum}-${tIdx}-${dIdx}`;
-
-    const existing = scheduleData[key];
-    if (existing && existing.status !== 'free') {
-        alert('【提示】此時段剛剛已被其他人預約或進入維護狀態，請重新選擇！');
-        updateAvailableRoomsForBooking();
-        return;
+    // 計算所有要寫入的格子 keys
+    let keysToBook = [];
+    for (let h = startH; h < endH; h++) {
+        const hourSlotStr = `${String(h).padStart(2, '0')}:00`;
+        let foundTIdx = -1;
+        timeslots.forEach((slotStr, idx) => {
+            if (slotStr.startsWith(hourSlotStr)) {
+                foundTIdx = idx;
+            }
+        });
+        if (foundTIdx !== -1) {
+            keysToBook.push(`${roomIdx}-${weekNum}-${foundTIdx}-${dIdx}`);
+        }
     }
 
-    scheduleData[key] = {
-        status: 'booked',
-        user: currentTeacherName,
-        reason: reason
-    };
+    // 再次做衝突二次確認
+    for (let key of keysToBook) {
+        const existing = scheduleData[key];
+        if (existing && existing.status !== 'free') {
+            alert('【提示】您選擇的時間區間內包含已被其他人預約或進入維護狀態的時段，請重新選擇！');
+            updateAvailableRoomsForBooking();
+            return;
+        }
+    }
 
-    alert(`成功預約 ${rooms[roomIdx]}！`);
+    // 正式批次寫入預約
+    keysToBook.forEach(key => {
+        scheduleData[key] = {
+            status: 'booked',
+            user: currentTeacherName,
+            reason: reason
+        };
+    });
+
+    alert(`成功預約 ${rooms[roomIdx]}（共 ${keysToBook.length} 個時段）！`);
     closeModal('modal-manual-booking');
 
     renderSchedule();

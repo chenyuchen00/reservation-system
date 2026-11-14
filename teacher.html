@@ -62,7 +62,7 @@
 
             <div class="filter-bar card">
                 <div class="room-tabs" id="room-tabs"></div>
-                
+
                 <div class="filter-group">
                     <button class="filter-btn active" onclick="filterStatus('all')">全部時段</button>
                     <button class="filter-btn" onclick="filterStatus('free')">可預約</button>
@@ -73,6 +73,12 @@
 
             <div class="schedule-wrapper" style="position: relative;">
                 <!-- 左側切換週數按鈕 -->
+                <button type="button" class="calender-btn btn-dark" onclick="openDatePicker()" title="快速選擇日期">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </button>
+                <input type="date" id="hidden-date-picker"
+                    style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;"
+                    onchange="jumpToSelectedDate(this.value)">
                 <button class="week-side-btn week-prev-btn" onclick="changeWeek(-1)">&#10094;</button>
 
                 <!-- 琴房一覽表表格卡片 -->
@@ -232,7 +238,7 @@
                             <option value="15:00">15:00</option>
                             <option value="16:00">16:00</option>
                             <option value="17:00">17:00</option>
-                            
+
                         </select>
                         <span style="color: var(--text-muted); font-weight: bold;">—</span>
                         <select id="manual-end-time" class="input" onchange="updateAvailableRoomsForBooking()">
@@ -245,7 +251,7 @@
                             <option value="16:00">16:00</option>
                             <option value="17:00">17:00</option>
                             <option value="18:00">18:00</option>
-                            
+
                         </select>
                     </div>
                 </div>

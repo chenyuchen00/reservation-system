@@ -75,6 +75,13 @@
 
             <div class="schedule-wrapper" style="position: relative;">
                 <!-- 左側切換週數按鈕 -->
+
+                <button type="button" class="calender-btn btn-dark" onclick="openDatePicker()" title="快速選擇日期">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </button>
+                <input type="date" id="hidden-date-picker"
+                    style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;"
+                    onchange="jumpToSelectedDate(this.value)">
                 <button class="week-side-btn week-prev-btn" onclick="changeWeek(-1)">&#10094;</button>
                 
                 <!-- 琴房一覽表表格卡片 -->

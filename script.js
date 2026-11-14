@@ -1936,4 +1936,42 @@ function deleteWeeklyCloseRule(id) {
 }
 
 
+// 點擊您的 calender-btn 時，彈出日期選擇器
+function openDatePicker() {
+    const datePicker = document.getElementById('hidden-date-picker');
+    if (!datePicker) return;
+
+    // 將 picker 預設為當前檢視中的基準週日期
+    const baseMonday = getMonday(currentDate);
+    const targetMonday = new Date(baseMonday);
+    targetMonday.setDate(targetMonday.getDate() + (weekOffset * 7));
+    datePicker.value = targetMonday.toISOString().split('T')[0];
+
+    // 觸發原生日期選擇視窗
+    if (typeof datePicker.showPicker === 'function') {
+        datePicker.showPicker();
+    } else {
+        datePicker.click();
+    }
+}
+
+// 選擇日期後自動計算週次並跳轉
+function jumpToSelectedDate(dateStr) {
+    if (!dateStr) return;
+
+    const selectedDate = new Date(dateStr);
+    if (isNaN(selectedDate.getTime())) return;
+
+    const baseMonday = getMonday(new Date()); // 以系統今天為基準的本週週一
+    const targetMonday = getMonday(selectedDate); // 目標日期所在的週一
+
+    const diffTime = targetMonday.getTime() - baseMonday.getTime();
+    const diffWeeks = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+    // 更新全局週數偏移量
+    weekOffset = diffWeeks;
+
+    // 重新渲染琴房一覽表
+    renderSchedule();
+}
 //4
